@@ -1,8 +1,7 @@
-fastapi
-uvicorn
-python-docx
+fastapi==0.112.2
+uvicorn==0.30.6
+python-docx==1.1.2
 googletrans==4.0.0-rc1
-notion-client
-httpx
-openpyxl
-requests
+notion-client==2.3.0
+openpyxl==3.1.2
+requests==2.32.2
