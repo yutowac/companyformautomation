@@ -304,3 +304,7 @@ def get_created_excel():
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }
     return Response(content=file_stream.getvalue(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 10000))  # Render の環境変数から取得
+    uvicorn.run(app, host="0.0.0.0", port=port)
