@@ -26,19 +26,19 @@ async function submitForm() {
 
     try {
         // Send data to FastAPI backend to generate the Word file
-        const wordResponse = await fetch("http://127.0.0.1:8080/generate-word", {
+        const wordResponse = await fetch("https://onestopjpn.onrender.com/generate-word", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData)
         });
 
-        const wordResponse2 = await fetch("http://127.0.0.1:8080/generate-word2", {
+        const wordResponse2 = await fetch("https://onestopjpn.onrender.com/generate-word2", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData)
         });
 
-        const excelResponse = await fetch("http://127.0.0.1:8080/generate-excel", {
+        const excelResponse = await fetch("https://onestopjpn.onrender.com/generate-excel", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData)
@@ -62,7 +62,7 @@ async function submitForm() {
 
 async function downloadWordFile() {
     try {
-        const response = await fetch("http://127.0.0.1:8080/get-created-word");
+        const response = await fetch("https://onestopjpn.onrender.com/get-created-word");
 
         if (!response.ok) {
             throw new Error("Failed to fetch Registration Word file");
@@ -83,7 +83,7 @@ async function downloadWordFile() {
 
 async function downloadWordFile2() {
     try {
-        const response = await fetch("http://127.0.0.1:8080/get-created-word2");
+        const response = await fetch("https://onestopjpn.onrender.com/get-created-word2");
         if (!response.ok) throw new Error("Failed to fetch Incorporation Articles Word file");
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -100,7 +100,7 @@ async function downloadWordFile2() {
 
 async function downloadExcelFile() {
     try {
-        const response = await fetch("http://127.0.0.1:8080/get-created-excel");
+        const response = await fetch("https://onestopjpn.onrender.com/get-created-excel");
 
         if (!response.ok) {
             throw new Error("Failed to fetch Corporation Application Excel file");
