@@ -1,0 +1,187 @@
+
+body {
+    font-family: 'Inter', sans-serif;
+    margin: 0 10%;
+    padding: 0;
+    background-color: #f4f7f9;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.container {
+    background: #ffffff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    max-width: 800px;
+    width: 100%;
+    text-align: center;
+    margin-top: 20px;
+
+    padding-top: 80px;
+}
+
+h1 {
+    font-size: 24px;
+    /* color: #333; */
+    color: #4a90e2;
+    margin-bottom: 15px;
+    text-align: center;
+
+    width: 100%;
+    /* background: white; */
+    position: fixed;
+    top: 10px;
+    left: 0;
+    /* box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); */
+    z-index: 10;
+    /* border-bottom-color: #f39c12 2px solid; */
+}
+
+h1::after {
+    content: "";
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 3px;
+    background-color: #f39c12;
+  }
+
+p.description {
+    font-size: 16px;
+    color: #555;
+    text-align: center;
+    margin-top: 20px; /* h1との間隔を確保 */
+    max-width: 100%;
+    font-weight: 600;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+
+    max-width: 800px;
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+
+    overflow-y: auto; /* スクロール可能にする */
+    max-height: 70vh;
+}
+
+label {
+    font-weight: bold;
+    color: #555;
+    text-align: left;
+    width: 100%;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    width: 98%;
+}
+
+.input-group input {
+    flex: 1;
+}
+
+input {
+    width: 95%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+button {
+    padding: 12px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s;
+    width: 100%;
+    /* margin-top: 10px; */
+}
+
+button:hover {
+    background: #0056b3;
+}
+
+/* #downloadButton {
+    display: none;
+    margin-top: 10px;
+} */
+
+#downloadMessage {
+    color: #28a745;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* ボタンを横並びに配置し、Bootstrapのsuccessカラーを適用 */
+.download-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+
+    /* padding-bottom: 20px; */
+}
+
+.download-buttons button {
+    display: none;
+    background-color: #28a745; /* Bootstrap success color */
+    width: auto;
+    padding: 10px 20px;
+}
+
+.download-buttons button:hover {
+    background-color: #218838;
+}
+
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.loader-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+}
+
+.loadermessage{
+    color:#0056b3;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

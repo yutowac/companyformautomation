@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Registration Form</title>
+    <link rel="stylesheet" href="style.css" type="text/css">
+    <script defer src="script.js"></script>
+</head>
+<body>
+    <h1>One-Stop Japan</h1>
+
+    <p class="description">Simply fill out the form below, and we will help you establish your company in Japan seamlessly.</p>
+
+    <form id="companyForm">
+        <label for="companyName">Company Name:</label>
+        <input type="text" id="companyName" placeholder="YourCompany.inc" required>
+
+        <label for="address">Head Office Address:</label>
+        <input type="text" id="address" placeholder="1-2-3 abc building, Shibuya, Tokyo" required>
+
+        <label for="day">Established Day:</label>
+        <div class="input-group">
+            <input type="text" id="year" placeholder="yyyy" required>
+            <input type="text" id="month" placeholder="mm" required>
+            <input type="text" id="day" placeholder="dd" required>
+        </div>
+
+        <label for="presidentName">Representative Name:</label>
+        <input type="text" id="presidentName" placeholder="John Doe" required>
+
+        <label for="presidentBday">Representative Birth Day:</label>
+        <div class="input-group">
+            <input type="text" id="birthyear" placeholder="yyyy" required>
+            <input type="text" id="birthmonth" placeholder="mm" required>
+            <input type="text" id="birthday" placeholder="dd" required>
+        </div>
+
+        <label for="presidentAddress">Representative Address:</label>
+        <input type="text" id="presidentAddress" placeholder="9-8-7 bef Apartment, Chiyoda, Tokyo" required>
+
+        <label for="purpose1">Business Purpose 1:</label>
+        <input type="text" id="purpose1" required>
+
+        <label for="purpose2">Business Purpose 2:</label>
+        <input type="text" id="purpose2" value="">
+
+        <label for="purpose3">Business Purpose 3:</label>
+        <input type="text" id="purpose3" value="">
+
+        <label for="purpose4">Business Purpose 4:</label>
+        <input type="text" id="purpose4" value="">
+
+        <label for="purpose5">Business Purpose 5:</label>
+        <input type="text" id="purpose5" value="">
+
+        <div id="loader" style="display: none;" class="loader-container">
+            <div class="loader"></div>
+            <span class="loadermessage">  Generating...</span>
+        </div>
+
+        <button type="button" onclick="submitForm()">Submit</button>
+
+    </form>
+
+    <p id="downloadMessage" style="display: none;">Your documents are ready!! Please download them below.</p>
+
+    <div class="download-buttons">
+        <button id="downloadWordButton" type="button" onclick="downloadWordFile()" style="display: none;">Company Registration</button>
+        <button id="downloadWordButton2" type="button" onclick="downloadWordFile2()" style="display: none;">Incorporation Articles</button>
+        <button id="downloadExcelButton" type="button" onclick="downloadExcelFile()" style="display: none;">Seal Registration</button>
+    </div>
+</body>
+</html>
