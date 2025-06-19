@@ -87,19 +87,47 @@ def send_slack_notification(message: str):
         response.raise_for_status()
     except Exception as e:
         print(f"Slack通知エラー: {e}")
-
-def send_slack_file_link(file_path: str, title: str):
-    # あなたの Render ドメイン名（フロントエンドと同じ）を使って生成
-    public_url = f"https://companyformautomation.onrender.com/{file_path}"
-
-    payload = {
-        "text": f":white_check_mark: {title} を生成しました。\n👉 [ダウンロードはこちら]({public_url})"
+        
+def upload_file_to_slack(file_path: str, title: str):
+    url = "https://slack.com/api/files.upload"
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}"
     }
+
+    data = {
+        "channels": SLACK_CHANNEL_ID,  # ここに `Uxxxxxx`（DM）や `Cxxxxxx`（チャンネル）を指定
+        "initial_comment": f"{title} をアップロードしました",
+        "title": title,
+    }
+
     try:
-        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
-        response.raise_for_status()
+        with open(file_path, "rb") as file_content:
+            files = {
+                "file": (os.path.basename(file_path), file_content)
+            }
+
+            response = requests.post(url, headers=headers, data=data, files=files)
+            result = response.json()
+            print("Slack API response:", result)
+
+            if not result.get("ok"):
+                print(f"Slackファイルアップロード失敗: {result.get('error')}")
+
     except Exception as e:
-        print(f"Slack通知エラー: {e}")
+        print(f"Slackファイル送信中のエラー: {e}")
+
+# def send_slack_file_link(file_path: str, title: str):
+#     # あなたの Render ドメイン名（フロントエンドと同じ）を使って生成
+#     public_url = f"https://companyformautomation.onrender.com/{file_path}"
+
+#     payload = {
+#         "text": f":white_check_mark: {title} を生成しました。\n👉 [ダウンロードはこちら]({public_url})"
+#     }
+#     try:
+#         response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+#         response.raise_for_status()
+#     except Exception as e:
+#         print(f"Slack通知エラー: {e}")
 # def upload_file_to_slack(file_path: str, title: str):
     # print(f"📎 ファイルアップロード処理を開始：{file_path} → {SLACK_CHANNEL_ID}")
     # with open(file_path, "rb") as file_content:
