@@ -46,10 +46,14 @@ async function submitForm() {
 
         if (wordResponse.ok && wordResponse2.ok && excelResponse.ok) {
             // alert("Files have been successfully generated.");
-            document.getElementById("downloadMessage").style.display = "block";
-            document.getElementById("downloadWordButton").style.display = "block"; // ダウンロードボタンを表示
-            document.getElementById("downloadWordButton2").style.display = "block"; // ダウンロードボタンを表示
-            document.getElementById("downloadExcelButton").style.display = "block";
+            // ダウンロードボタン
+            // document.getElementById("downloadMessage").style.display = "block";
+            // document.getElementById("downloadWordButton").style.display = "block";
+            // document.getElementById("downloadWordButton2").style.display = "block";
+            // document.getElementById("downloadExcelButton").style.display = "block";
+
+            document.getElementById("thankYouMessage").style.display = "block";
+
         } else {
             alert("Error: " + (await wordResponse.json()).detail);
         }
