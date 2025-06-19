@@ -96,8 +96,19 @@ def upload_file_to_slack(file_path: str, title: str):
             data={"channels": SLACK_CHANNEL_ID, "title": title},
             files={"file": (os.path.basename(file_path), file_content)}
         )
-    if not response.json().get("ok"):
-        print(f"Slackファイルアップロード失敗: {response.text}")
+
+    try:
+        result = response.json()
+    except Exception as e:
+        print("Slack APIレスポンスのJSON化に失敗:", e)
+        print("レスポンス本文:", response.text)
+        return
+
+    # ✅ 必ず出力（成功でも失敗でも）
+    print("Slack API response:", result)
+
+    if not result.get("ok"):
+        print(f"Slackファイルアップロード失敗: {result.get('error')}")
 
 # 法人届出書
 @app.post("/generate-word")
