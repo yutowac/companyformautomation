@@ -89,6 +89,7 @@ def send_slack_notification(message: str):
         print(f"Slack通知エラー: {e}")
 
 def upload_file_to_slack(file_path: str, title: str):
+    print(f"📎 ファイルアップロード処理を開始：{file_path} → {SLACK_CHANNEL_ID}")
     with open(file_path, "rb") as file_content:
         response = requests.post(
             "https://slack.com/api/files.upload",
@@ -167,6 +168,7 @@ def generate_word(data: FormData):
                 cell.text = cell.text.replace("(B目的5)", translated_purpose5)
 
     # 生成された Word ファイルを保存
+    print(f"✅ Wordファイルを保存: {output_path}")
     doc.save(output_path)
 
     send_slack_notification("✅ 登記書類（Registration）を生成しました")
