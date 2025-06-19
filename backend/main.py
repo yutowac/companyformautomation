@@ -88,28 +88,40 @@ def send_slack_notification(message: str):
     except Exception as e:
         print(f"Slack通知エラー: {e}")
 
-def upload_file_to_slack(file_path: str, title: str):
-    print(f"📎 ファイルアップロード処理を開始：{file_path} → {SLACK_CHANNEL_ID}")
-    with open(file_path, "rb") as file_content:
-        response = requests.post(
-            "https://slack.com/api/files.upload",
-            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
-            data={"channels": SLACK_CHANNEL_ID, "title": title},
-            files={"file": (os.path.basename(file_path), file_content)}
-        )
+def send_slack_file_link(file_path: str, title: str):
+    # あなたの Render ドメイン名（フロントエンドと同じ）を使って生成
+    public_url = f"https://companyformautomation.onrender.com/{file_path}"
 
+    payload = {
+        "text": f":white_check_mark: {title} を生成しました。\n👉 [ダウンロードはこちら]({public_url})"
+    }
     try:
-        result = response.json()
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+        response.raise_for_status()
     except Exception as e:
-        print("Slack APIレスポンスのJSON化に失敗:", e)
-        print("レスポンス本文:", response.text)
-        return
+        print(f"Slack通知エラー: {e}")
+# def upload_file_to_slack(file_path: str, title: str):
+    # print(f"📎 ファイルアップロード処理を開始：{file_path} → {SLACK_CHANNEL_ID}")
+    # with open(file_path, "rb") as file_content:
+    #     response = requests.post(
+    #         "https://slack.com/api/files.upload",
+    #         headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+    #         data={"channels": SLACK_CHANNEL_ID, "title": title},
+    #         files={"file": (os.path.basename(file_path), file_content)}
+    #     )
 
-    # ✅ 必ず出力（成功でも失敗でも）
-    print("Slack API response:", result)
+    # try:
+    #     result = response.json()
+    # except Exception as e:
+    #     print("Slack APIレスポンスのJSON化に失敗:", e)
+    #     print("レスポンス本文:", response.text)
+    #     return
 
-    if not result.get("ok"):
-        print(f"Slackファイルアップロード失敗: {result.get('error')}")
+    # # ✅ 必ず出力（成功でも失敗でも）
+    # print("Slack API response:", result)
+
+    # if not result.get("ok"):
+    #     print(f"Slackファイルアップロード失敗: {result.get('error')}")
 
 # 法人届出書
 @app.post("/generate-word")
