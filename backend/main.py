@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 from datetime import datetime
 from io import BytesIO
 import os
-from config import GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY
+from config import GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID
 from fastapi.middleware.cors import CORSMiddleware
 
 TEMPLATE_DIR = "/var/data/"
@@ -80,6 +80,25 @@ def to_katakana(text: str) -> str:
     else:
         raise HTTPException(status_code=500, detail="Katakana conversion failed")
 
+def send_slack_notification(message: str):
+    payload = {"text": message}
+    try:
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"Slack通知エラー: {e}")
+
+def upload_file_to_slack(file_path: str, title: str):
+    with open(file_path, "rb") as file_content:
+        response = requests.post(
+            "https://slack.com/api/files.upload",
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            data={"channels": SLACK_CHANNEL_ID, "title": title},
+            files={"file": (os.path.basename(file_path), file_content)}
+        )
+    if not response.json().get("ok"):
+        print(f"Slackファイルアップロード失敗: {response.text}")
+
 # 法人届出書
 @app.post("/generate-word")
 def generate_word(data: FormData):
@@ -139,13 +158,17 @@ def generate_word(data: FormData):
     # 生成された Word ファイルを保存
     doc.save(output_path)
 
-    headers = {
-        "Content-Disposition": "attachment; filename=created_registration.docx",
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    }
+    send_slack_notification("✅ 登記書類（Registration）を生成しました")
+    upload_file_to_slack(output_path, "登記書類（Registration）")
+    return {"message": "Word file generated"}
 
-    with open(output_path, "rb") as file:
-        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_registration.docx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # }
+
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.get("/get-created-word")
 def get_created_word():
@@ -219,14 +242,17 @@ def generate_word(data: FormData):
 
     # 生成された Word ファイルを保存
     doc.save(output_path)
+    send_slack_notification("✅ 定款（Incorporation Articles）を生成しました")
+    upload_file_to_slack(output_path, "定款（Incorporation Articles）")
+    return {"message": "Word2 file generated"}
 
-    headers = {
-        "Content-Disposition": "attachment; filename=created_incorparticles.docx",
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    }
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_incorparticles.docx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # }
 
-    with open(output_path, "rb") as file:
-        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.get("/get-created-word2")
 def get_created_word():
@@ -288,7 +314,11 @@ def generate_excel(data: FormData):
     # 生成された Excel ファイルを保存
     wb.save(output_path)
 
+    send_slack_notification("✅ 印鑑届出書（Seal Registration Excel）を生成しました")
+    upload_file_to_slack(output_path, "印鑑届出書（Excel）")
     return {"message": "Excel file successfully generated"}
+
+    # return {"message": "Excel file successfully generated"}
 
 @app.get("/get-created-excel")
 def get_created_excel():
@@ -308,3 +338,6 @@ def get_created_excel():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))  # Render の環境変数から取得
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+
