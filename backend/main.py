@@ -90,7 +90,7 @@ def send_slack_notification(message: str):
         
 def upload_file_to_slack(file_path: str, title: str):
     slack_api_url = "https://slack.com/api/chat.postMessage"
-    download_url = f"https://your-backend-service.onrender.com/{endpoint}"  # ←本番URLに変更してください
+    download_url = f"https://onestopjpn.onrender.com/{endpoint}"  # ←本番URLに変更してください
 
     headers = {
         "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
