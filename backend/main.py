@@ -113,30 +113,27 @@ def send_slack_notification(message: str):
 #         print("Slackメッセージ送信エラー:", e)
 
 def upload_file_to_slack(file_path: str, title: str):
-    print(f"📎 ファイルアップロード処理を開始：{file_path} → {SLACK_CHANNEL_ID}")
+    url = "https://slack.com/api/files.upload"
+
     with open(file_path, "rb") as file_content:
         response = requests.post(
-            "https://slack.com/api/files.upload",
-            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            url,
+            headers={
+                "Authorization": f"Bearer {SLACK_BOT_TOKEN}"
+            },
             data={
-                "channels": SLACK_CHANNEL_ID,  # DMなら SLACK_USER_ID でもOK
+                "channels": SLACK_CHANNEL_ID,
                 "title": title,
                 "filename": os.path.basename(file_path),
-                "initial_comment": f":white_check_mark: {title} を生成しました。"
+                "initial_comment": f":white_check_mark: {title} を生成しました。",
             },
-            files={"file": (os.path.basename(file_path), file_content)}
+            files={
+                "file": (os.path.basename(file_path), file_content)
+            }
         )
 
-    try:
-        result = response.json()
-    except Exception as e:
-        print("Slack APIレスポンスのJSON化に失敗:", e)
-        print("レスポンス本文:", response.text)
-        return
-
-    # ✅ 必ず出力（成功でも失敗でも）
+    result = response.json()
     print("Slack API response:", result)
-
     if not result.get("ok"):
         print(f"Slackファイルアップロード失敗: {result.get('error')}")
 
