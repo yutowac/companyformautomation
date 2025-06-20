@@ -15,6 +15,7 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 # Slack Bot Token（ファイルアップロード用）
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID")
+SLACK_USER_ID = os.getenv("SLACK_USER_ID")
 
 # その他（例：Notionなど）※使っていないなら削除可
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
