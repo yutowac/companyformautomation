@@ -88,7 +88,7 @@ def send_slack_notification(message: str):
     except Exception as e:
         print(f"Slack通知エラー: {e}")
         
-def upload_file_to_slack(file_path: str, title: str):
+def upload_file_to_slack(endpoint: str, title: str):
     slack_api_url = "https://slack.com/api/chat.postMessage"
     download_url = f"https://onestopjpn.onrender.com/{endpoint}"  # ←本番URLに変更してください
 
