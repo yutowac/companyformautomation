@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 from datetime import datetime
 from io import BytesIO
 import os
-from config import GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID
+from config import GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, SLACK_USER_ID
 from fastapi.middleware.cors import CORSMiddleware
 
 TEMPLATE_DIR = "/var/data/"
