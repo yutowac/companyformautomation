@@ -113,42 +113,23 @@ def send_slack_notification(message: str):
 #         print("Slackメッセージ送信エラー:", e)
 
 def upload_file_to_slack(filepath: str, title: str):
-    print(f"📎 V2 ファイルアップロード処理を開始：{filepath} → {SLACK_USER_ID}")
-
-    # ステップ1: Slackにメタデータを送信
-    response = requests.post(
-        "https://slack.com/api/files.uploadV2",
-        headers={
-            "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "title": title,
-            "filename": filepath,
-            "channels": [SLACK_USER_ID]
-        }
-    )
-
-    resp_json = response.json()
-    if not resp_json.get("ok"):
-        print("❌ Slack API エラー:", resp_json)
-        return
-
-    upload_url = resp_json["file"]["upload_url"]
-    file_id = resp_json["file"]["id"]
-
-    # ステップ2: 実ファイルをPUTでアップロード
-    with open(filepath, "rb") as f:
-        file_data = f.read()
-
-    upload_res = requests.put(upload_url, data=file_data, headers={
-        "Content-Type": "application/octet-stream"
-    })
-
-    if upload_res.status_code == 200:
+    print(f"📎 ファイルアップロード処理を開始：{filepath} → {SLACK_USER_ID}")
+    with open(filepath, "rb") as file_content:
+        response = requests.post(
+            "https://slack.com/api/files.upload",
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            files={"file": (filepath, file_content)},
+            data={
+                "channels": SLACK_USER_ID,
+                "title": title,
+                "filename": filepath,
+            }
+        )
+    res_json = response.json()
+    if res_json.get("ok"):
         print(f"✅ ファイルアップロード成功（{title}）")
     else:
-        print(f"❌ ファイルデータ送信失敗: {upload_res.status_code}")
+        print(f"❌ Slackファイルアップロード失敗: {res_json}")
 
 
 
