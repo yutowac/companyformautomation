@@ -89,32 +89,27 @@ def send_slack_notification(message: str):
         print(f"Slack通知エラー: {e}")
         
 def upload_file_to_slack(file_path: str, title: str):
-    url = "https://slack.com/api/files.upload"
+    slack_api_url = "https://slack.com/api/chat.postMessage"
+    download_url = f"https://your-backend-service.onrender.com/{endpoint}"  # ←本番URLに変更してください
+
     headers = {
-        "Authorization": f"Bearer {SLACK_BOT_TOKEN}"
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json"
     }
 
-    data = {
-        "channels": SLACK_CHANNEL_ID,  # ここに `Uxxxxxx`（DM）や `Cxxxxxx`（チャンネル）を指定
-        "initial_comment": f"{title} をアップロードしました",
-        "title": title,
+    message = {
+        "channel": SLACK_USER_ID,
+        "text": f":white_check_mark: {title} を生成しました。\n📎 ダウンロード: <{download_url}>"
     }
 
     try:
-        with open(file_path, "rb") as file_content:
-            files = {
-                "file": (os.path.basename(file_path), file_content)
-            }
-
-            response = requests.post(url, headers=headers, data=data, files=files)
-            result = response.json()
-            print("Slack API response:", result)
-
-            if not result.get("ok"):
-                print(f"Slackファイルアップロード失敗: {result.get('error')}")
-
+        response = requests.post(slack_api_url, headers=headers, json=message)
+        result = response.json()
+        print("Slack chat.postMessage response:", result)
+        if not result.get("ok"):
+            print(f"Slackメッセージ送信失敗: {result.get('error')}")
     except Exception as e:
-        print(f"Slackファイル送信中のエラー: {e}")
+        print("Slackメッセージ送信エラー:", e)
 
 # def send_slack_file_link(file_path: str, title: str):
 #     # あなたの Render ドメイン名（フロントエンドと同じ）を使って生成
