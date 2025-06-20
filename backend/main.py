@@ -207,7 +207,7 @@ def generate_word(data: FormData):
     doc.save(output_path)
 
     send_slack_notification("✅ 登記書類（Registration）を生成しました")
-    upload_file_to_slack(output_path, "登記書類（Registration）")
+    upload_file_to_slack("get-created-word", "登記書類（Registration）")
     return {"message": "Word file generated"}
 
     # headers = {
@@ -291,7 +291,7 @@ def generate_word(data: FormData):
     # 生成された Word ファイルを保存
     doc.save(output_path)
     send_slack_notification("✅ 定款（Incorporation Articles）を生成しました")
-    upload_file_to_slack(output_path, "定款（Incorporation Articles）")
+    upload_file_to_slack("get-created-word2", "定款（Incorporation Articles）")
     return {"message": "Word2 file generated"}
 
     # headers = {
@@ -363,7 +363,7 @@ def generate_excel(data: FormData):
     wb.save(output_path)
 
     send_slack_notification("✅ 印鑑届出書（Seal Registration Excel）を生成しました")
-    upload_file_to_slack(output_path, "印鑑届出書（Excel）")
+    upload_file_to_slack("get-created-excel", "印鑑届出書（Excel）")
     return {"message": "Excel file successfully generated"}
 
     # return {"message": "Excel file successfully generated"}
