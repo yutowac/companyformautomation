@@ -10,6 +10,11 @@ import os
 from config import GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, SLACK_USER_ID
 from fastapi.middleware.cors import CORSMiddleware
 
+import base64
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from email.message import EmailMessage
+
 TEMPLATE_DIR = "/var/data/"
 
 # SSL検証回避
@@ -131,7 +136,27 @@ def upload_file_to_slack(filepath: str, title: str):
     else:
         print(f"❌ Slackファイルアップロード失敗: {res_json}")
 
+def send_email_with_attachments(filepaths: list, subject: str, body: str, to: str):
+    creds = Credentials.from_authorized_user_file("/etc/secrets/token.json", ["https://www.googleapis.com/auth/gmail.send"])
+    service = build("gmail", "v1", credentials=creds)
 
+    message = EmailMessage()
+    message.set_content(body)
+    message["To"] = to
+    message["From"] = to
+    message["Subject"] = subject
+
+    for filepath in filepaths:
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+            file_name = os.path.basename(filepath)
+        message.add_attachment(file_data, maintype="application", subtype="octet-stream", filename=file_name)
+
+    encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    create_message = {"raw": encoded_message}
+
+    send_message = service.users().messages().send(userId="me", body=create_message).execute()
+    print(f"✅ Gmail送信成功: {send_message['id']}")
 
 
 # 法人届出書
@@ -195,7 +220,13 @@ def generate_word(data: FormData):
     doc.save(output_path)
 
     send_slack_notification("✅ 登記書類（Registration）を生成しました")
-    upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
+    send_email_with_attachments(
+        ["created_registration.docx"],
+        subject="【自動送信】登記書類（Registration）が生成されました",
+        body="以下の登記書類を添付ファイルとして送付いたします。",
+        to="yutowachi52@gmail.com"
+    )
+    # upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
     return {"message": "Word file generated"}
 
     # headers = {
@@ -279,7 +310,13 @@ def generate_word(data: FormData):
     # 生成された Word ファイルを保存
     doc.save(output_path)
     send_slack_notification("✅ 定款（Incorporation Articles）を生成しました")
-    upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
+    send_email_with_attachments(
+        ["created_incorparticles.docx"],
+        subject="【自動送信】定款（Incorporation Articles）が生成されました",
+        body="以下の登記書類を添付ファイルとして送付いたします。",
+        to="yutowachi52@gmail.com"
+    )
+    # upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
     return {"message": "Word2 file generated"}
 
     # headers = {
@@ -351,7 +388,13 @@ def generate_excel(data: FormData):
     wb.save(output_path)
 
     send_slack_notification("✅ 印鑑届出書（Seal Registration Excel）を生成しました")
-    upload_file_to_slack("created_corporation_application.xlsx", "印鑑届出書（Excel）")
+    send_email_with_attachments(
+        ["created_corporation_application.xlsx"],
+        subject="【自動送信】印鑑届出書（Seal Registration Form）が生成されました",
+        body="以下の登記書類を添付ファイルとして送付いたします。",
+        to="yutowachi52@gmail.com"
+    )
+    # upload_file_to_slack("created_corporation_application.xlsx", "印鑑届出書（Excel）")
     return {"message": "Excel file successfully generated"}
 
     # return {"message": "Excel file successfully generated"}
