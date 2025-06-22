@@ -316,12 +316,6 @@ def generate_word(data: FormData):
         body="以下の登記書類を添付ファイルとして送付いたします。",
         to="yutowachi52@gmail.com"
     )
-    send_email_with_attachments(
-        ["created_incorparticles.docx"],
-        subject="【自動送信】定款（Incorporation Articles）が生成されました",
-        body="以下の登記書類を添付ファイルとして送付いたします。",
-        to="yuto.wachi.p@tanita.co.jp"
-    )
     # upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
     return {"message": "Word2 file generated"}
 
