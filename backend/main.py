@@ -222,22 +222,22 @@ def generate_word(data: FormData):
     doc.save(output_path)
 
     send_slack_notification("✅ 登記書類（Registration）を生成しました")
-    # send_email_with_attachments(
-    #     ["created_registration.docx"],
-    #     subject="【自動送信】登記書類（Registration）が生成されました",
-    #     body="以下の登記書類を添付ファイルとして送付いたします。",
-    #     to="yutowachi52@gmail.com"
-    # )
-    # upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
-    # return {"message": "Word file generated"}
+    send_email_with_attachments(
+        ["created_registration.docx"],
+        subject="【自動送信】登記書類（Registration）が生成されました",
+        body="以下の登記書類を添付ファイルとして送付いたします。",
+        to="yutowachi52@gmail.com"
+    )
+    upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
+    return {"message": "Word file generated"}
 
-    headers = {
-        "Content-Disposition": "attachment; filename=created_registration.docx",
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    }
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_registration.docx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # }
 
-    with open(output_path, "rb") as file:
-        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.get("/get-created-word")
 def get_created_word():
@@ -312,22 +312,22 @@ def generate_word(data: FormData):
     # 生成された Word ファイルを保存
     doc.save(output_path)
     send_slack_notification("✅ 定款（Incorporation Articles）を生成しました")
-    # send_email_with_attachments(
-    #     ["created_incorparticles.docx"],
-    #     subject="【自動送信】定款（Incorporation Articles）が生成されました",
-    #     body="以下の登記書類を添付ファイルとして送付いたします。",
-    #     to="yutowachi52@gmail.com"
-    # )
-    # upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
-    # return {"message": "Word2 file generated"}
+    send_email_with_attachments(
+        ["created_incorparticles.docx"],
+        subject="【自動送信】定款（Incorporation Articles）が生成されました",
+        body="以下の登記書類を添付ファイルとして送付いたします。",
+        to="yutowachi52@gmail.com"
+    )
+    upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
+    return {"message": "Word2 file generated"}
 
-    headers = {
-        "Content-Disposition": "attachment; filename=created_incorparticles.docx",
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    }
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_incorparticles.docx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # }
 
-    with open(output_path, "rb") as file:
-        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.get("/get-created-word2")
 def get_created_word():
@@ -390,22 +390,22 @@ def generate_excel(data: FormData):
     wb.save(output_path)
 
     send_slack_notification("✅ 印鑑届出書（Seal Registration Excel）を生成しました")
-    # send_email_with_attachments(
-    #     ["created_corporation_application.xlsx"],
-    #     subject="【自動送信】印鑑届出書（Seal Registration Form）が生成されました",
-    #     body="以下の登記書類を添付ファイルとして送付いたします。",
-    #     to="yutowachi52@gmail.com"
-    # )
-    # upload_file_to_slack("created_corporation_application.xlsx", "印鑑届出書（Excel）")
-    # return {"message": "Excel file successfully generated"}
+    send_email_with_attachments(
+        ["created_corporation_application.xlsx"],
+        subject="【自動送信】印鑑届出書（Seal Registration Form）が生成されました",
+        body="以下の登記書類を添付ファイルとして送付いたします。",
+        to="yutowachi52@gmail.com"
+    )
+    upload_file_to_slack("created_corporation_application.xlsx", "印鑑届出書（Excel）")
+    return {"message": "Excel file successfully generated"}
 
-    headers = {
-        "Content-Disposition": "attachment; filename=created_corporation_application.xlsx",
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    }
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_corporation_application.xlsx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # }
 
-    with open(output_path, "rb") as file:
-        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 @app.get("/get-created-excel")
 def get_created_excel():
