@@ -227,15 +227,15 @@ def generate_word(data: FormData):
         to="yutowachi52@gmail.com"
     )
     # upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
-    return {"message": "Word file generated"}
+    # return {"message": "Word file generated"}
 
-    # headers = {
-    #     "Content-Disposition": "attachment; filename=created_registration.docx",
-    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    # }
+    headers = {
+        "Content-Disposition": "attachment; filename=created_registration.docx",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
 
-    # with open(output_path, "rb") as file:
-    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    with open(output_path, "rb") as file:
+        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.get("/get-created-word")
 def get_created_word():
@@ -317,15 +317,15 @@ def generate_word(data: FormData):
         to="yutowachi52@gmail.com"
     )
     # upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
-    return {"message": "Word2 file generated"}
+    # return {"message": "Word2 file generated"}
 
-    # headers = {
-    #     "Content-Disposition": "attachment; filename=created_incorparticles.docx",
-    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    # }
+    headers = {
+        "Content-Disposition": "attachment; filename=created_incorparticles.docx",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
 
-    # with open(output_path, "rb") as file:
-    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    with open(output_path, "rb") as file:
+        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.get("/get-created-word2")
 def get_created_word():
@@ -395,9 +395,15 @@ def generate_excel(data: FormData):
         to="yutowachi52@gmail.com"
     )
     # upload_file_to_slack("created_corporation_application.xlsx", "印鑑届出書（Excel）")
-    return {"message": "Excel file successfully generated"}
-
     # return {"message": "Excel file successfully generated"}
+
+    headers = {
+        "Content-Disposition": "attachment; filename=created_corporation_application.xlsx",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    }
+
+    with open(output_path, "rb") as file:
+        return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 @app.get("/get-created-excel")
 def get_created_excel():
