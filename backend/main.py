@@ -59,7 +59,7 @@ def get_japanese_address(address: str) -> str:
     geocode_result = response.json()
 
     if geocode_result.get("status") == "OK":
-        if "〒" is in geocode_result["results"][0]["formatted_address"]:
+        if "〒" in geocode_result["results"][0]["formatted_address"]:
             return geocode_result["results"][0]["formatted_address"].split("〒")[1][8:]
         return geocode_result["results"][0]["formatted_address"]
     else:
