@@ -59,7 +59,9 @@ def get_japanese_address(address: str) -> str:
     geocode_result = response.json()
 
     if geocode_result.get("status") == "OK":
-        return geocode_result["results"][0]["formatted_address"].split("〒")[1][8:]
+        if "〒" is in geocode_result["results"][0]["formatted_address"]:
+            return geocode_result["results"][0]["formatted_address"].split("〒")[1][8:]
+        return geocode_result["results"][0]["formatted_address"]
     else:
         raise HTTPException(status_code=500, detail="Address conversion failed")
 
@@ -220,11 +222,11 @@ def generate_word(data: FormData):
     doc.save(output_path)
 
     send_slack_notification("✅ 登記書類（Registration）を生成しました")
-    send_email_with_attachments(
-        ["created_registration.docx"],
-        subject="【自動送信】登記書類（Registration）が生成されました",
-        body="以下の登記書類を添付ファイルとして送付いたします。",
-        to="yutowachi52@gmail.com"
+    # send_email_with_attachments(
+    #     ["created_registration.docx"],
+    #     subject="【自動送信】登記書類（Registration）が生成されました",
+    #     body="以下の登記書類を添付ファイルとして送付いたします。",
+    #     to="yutowachi52@gmail.com"
     )
     # upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
     # return {"message": "Word file generated"}
@@ -310,12 +312,12 @@ def generate_word(data: FormData):
     # 生成された Word ファイルを保存
     doc.save(output_path)
     send_slack_notification("✅ 定款（Incorporation Articles）を生成しました")
-    send_email_with_attachments(
-        ["created_incorparticles.docx"],
-        subject="【自動送信】定款（Incorporation Articles）が生成されました",
-        body="以下の登記書類を添付ファイルとして送付いたします。",
-        to="yutowachi52@gmail.com"
-    )
+    # send_email_with_attachments(
+    #     ["created_incorparticles.docx"],
+    #     subject="【自動送信】定款（Incorporation Articles）が生成されました",
+    #     body="以下の登記書類を添付ファイルとして送付いたします。",
+    #     to="yutowachi52@gmail.com"
+    # )
     # upload_file_to_slack("created_incorparticles.docx", "定款（Incorporation Articles）")
     # return {"message": "Word2 file generated"}
 
@@ -388,12 +390,12 @@ def generate_excel(data: FormData):
     wb.save(output_path)
 
     send_slack_notification("✅ 印鑑届出書（Seal Registration Excel）を生成しました")
-    send_email_with_attachments(
-        ["created_corporation_application.xlsx"],
-        subject="【自動送信】印鑑届出書（Seal Registration Form）が生成されました",
-        body="以下の登記書類を添付ファイルとして送付いたします。",
-        to="yutowachi52@gmail.com"
-    )
+    # send_email_with_attachments(
+    #     ["created_corporation_application.xlsx"],
+    #     subject="【自動送信】印鑑届出書（Seal Registration Form）が生成されました",
+    #     body="以下の登記書類を添付ファイルとして送付いたします。",
+    #     to="yutowachi52@gmail.com"
+    # )
     # upload_file_to_slack("created_corporation_application.xlsx", "印鑑届出書（Excel）")
     # return {"message": "Excel file successfully generated"}
 
