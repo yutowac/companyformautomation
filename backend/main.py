@@ -227,7 +227,7 @@ def generate_word(data: FormData):
     #     subject="【自動送信】登記書類（Registration）が生成されました",
     #     body="以下の登記書類を添付ファイルとして送付いたします。",
     #     to="yutowachi52@gmail.com"
-    )
+    # )
     # upload_file_to_slack("created_registration.docx", "登記書類（Registration）")
     # return {"message": "Word file generated"}
 
