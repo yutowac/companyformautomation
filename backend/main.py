@@ -1,0 +1,968 @@
+# パッケージ
+from fastapi import FastAPI, HTTPException, Response
+from pydantic import BaseModel
+import requests
+from docx import Document
+from openpyxl import load_workbook
+from datetime import datetime
+from io import BytesIO
+import os
+import re
+import asyncio
+from config import (
+    GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_USER_ID,
+    GOOGLE_DRIVE_CREDENTIALS_PATH, GOOGLE_DRIVE_FOLDER_ID, GOOGLE_SHEETS_SPREADSHEET_ID,
+    TEMPLATE_DIR,
+)
+from fastapi.middleware.cors import CORSMiddleware
+
+import uvicorn
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
+import httplib2
+from google_auth_httplib2 import AuthorizedHttp
+from googletrans import Translator
+import romkan2
+
+# TEMPLATE_DIR は config から取得（Render では backend のカレントディレクトリ）
+
+# SSL検証回避
+requests.packages.urllib3.disable_warnings()
+
+app = FastAPI()
+
+# CORS 設定を追加
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 必要なら特定のオリジンに制限可能
+    allow_credentials=True,
+    allow_methods=["*"],  # すべてのHTTPメソッドを許可（GET, POST, OPTIONSなど）
+    allow_headers=["*"],  # すべてのヘッダーを許可
+)
+
+class FormData(BaseModel):
+    companyName: str
+    presidentName: str
+    presidentAddress: str
+    birthyear: int
+    birthmonth: int
+    birthday: int
+    purpose1: str
+    purpose2: str
+    purpose3: str
+    purpose4: str
+    purpose5: str
+    email: str
+
+# Google Maps API を使用して住所を日本語に変換
+def get_japanese_address(address: str) -> str:
+    params = {
+        "address": address,
+        "key": GOOGLE_MAPS_API_KEY,
+        "language": "ja"
+    }
+    response = requests.get("https://maps.googleapis.com/maps/api/geocode/json", params=params, verify=False)
+    geocode_result = response.json()
+
+    if geocode_result.get("status") == "OK":
+        if "〒" in geocode_result["results"][0]["formatted_address"]:
+            return geocode_result["results"][0]["formatted_address"].split("〒")[1][8:]
+        return geocode_result["results"][0]["formatted_address"]
+    else:
+        raise HTTPException(status_code=500, detail="Address conversion failed")
+
+
+def get_japanese_address_katakana(address: str) -> str:
+    """住所を日本語に変換し、ひらがな部分をカタカナにした表記で返す（(C社員住所)用）"""
+    ja_address = get_japanese_address(address)
+    return hiragana_to_katakana(ja_address)
+
+
+def _roman_to_katakana_for_address(address: str) -> str:
+    """住所文字列のローマ字部分をカタカナに変換（スペース・カンマで区切って各トークンを変換）"""
+    if not address or not address.strip():
+        return ""
+    tokens = re.split(r"[\s,]+", address.strip())
+    result = []
+    for part in tokens:
+        if not part:
+            continue
+        if part.isalpha():
+            try:
+                result.append(romkan2.to_katakana(part.lower()))
+            except Exception:
+                result.append(part)
+        else:
+            result.append(part)
+    return " ".join(result)
+
+
+def get_japanese_address_katakana_safe(address: str) -> str:
+    """(C社員住所)用。Maps API で日本語→カタカナ。失敗時は入力住所をそのまま返す（無理やりカタカナにはしない）"""
+    if not address or not address.strip():
+        return ""
+    try:
+        result = get_japanese_address_katakana(address)
+        if result and not _is_mostly_roman(result):
+            return result
+    except Exception:
+        pass
+    return address
+
+# 翻訳関数
+async def translate_text(text: str, target_lang: str = "ja") -> str:
+    # 空文字列の場合は空文字列を返す（エラーを投げない）
+    if not text or not text.strip():
+        return ""
+    
+    max_retries = 3
+    delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            # タイムアウト設定付きでTranslatorを作成（120秒）
+            async with Translator(timeout=120.0) as translator:
+                result = await translator.translate(text, dest=target_lang)
+                return result.text
+        except Exception as e:
+            # 接続タイムアウトエラーの場合のみリトライ
+            is_timeout = "ConnectTimeout" in str(type(e).__name__) or "timeout" in str(e).lower() or "10060" in str(e)
+            if is_timeout and attempt < max_retries - 1:
+                print(f"⚠️ 翻訳接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                await asyncio.sleep(delay)
+                delay *= 2  # 指数バックオフ
+            else:
+                # 最終的に失敗した場合、元のテキストを返す（フォールバック）
+                if attempt == max_retries - 1:
+                    print(f"⚠️ 翻訳失敗（{max_retries}回試行後）、元のテキストを使用: {text}")
+                    return text
+                else:
+                    import traceback
+                    error_detail = f"Translation failed: {str(e)}"
+                    error_traceback = traceback.format_exc()
+                    print(f"❌ {error_detail}")
+                    print(f"❌ Traceback: {error_traceback}")
+                    raise HTTPException(status_code=500, detail=error_detail)
+
+# カタカナ変換用関数（ひらがなに変換してからカタカナに）
+async def to_katakana(text: str) -> str:
+    # 空文字列の場合は空文字列を返す（エラーを投げない）
+    if not text or not text.strip():
+        return ""
+    
+    max_retries = 3
+    delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            # タイムアウト設定付きでTranslatorを作成（120秒）
+            async with Translator(timeout=120.0) as translator:
+                # 日本語に翻訳（ひらがなになることが多い）
+                result = await translator.translate(text, dest="ja")
+                hiragana_text = result.text.replace(" ", "")
+                # ひらがなをカタカナに変換
+                return hiragana_to_katakana(hiragana_text)
+        except Exception as e:
+            # 接続タイムアウトエラーの場合のみリトライ
+            is_timeout = "ConnectTimeout" in str(type(e).__name__) or "timeout" in str(e).lower() or "10060" in str(e)
+            if is_timeout and attempt < max_retries - 1:
+                print(f"⚠️ カタカナ変換接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                await asyncio.sleep(delay)
+                delay *= 2  # 指数バックオフ
+            else:
+                # 最終的に失敗した場合、元のテキストをカタカナ風に変換（フォールバック）
+                if attempt == max_retries - 1:
+                    print(f"⚠️ カタカナ変換失敗（{max_retries}回試行後）、元のテキストを使用: {text}")
+                    # 元のテキストをそのまま返す（カタカナ変換なし）
+                    return text
+                else:
+                    import traceback
+                    error_detail = f"Katakana conversion failed: {str(e)}"
+                    error_traceback = traceback.format_exc()
+                    print(f"❌ {error_detail}")
+                    print(f"❌ Traceback: {error_traceback}")
+                    raise HTTPException(status_code=500, detail=error_detail)
+
+# ひらがな→カタカナ変換関数
+def hiragana_to_katakana(text: str) -> str:
+    """ひらがなをカタカナに変換"""
+    result = []
+    for char in text:
+        # ひらがなの範囲: U+3041-U+3096
+        # カタカナの範囲: U+30A1-U+30F6
+        # 差は0x60（96）
+        if '\u3041' <= char <= '\u3096':
+            # ひらがなをカタカナに変換
+            katakana_char = chr(ord(char) + 0x60)
+            result.append(katakana_char)
+        else:
+            # ひらがな以外はそのまま
+            result.append(char)
+    return ''.join(result)
+
+
+def _is_mostly_roman(text: str) -> bool:
+    """文字列の大半がローマ字（ASCII英字）かどうか。翻訳失敗で元のアルファベットが返った場合に True"""
+    if not text or not text.strip():
+        return True
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    roman = sum(1 for c in letters if ord(c) < 0x100 and c.isascii())
+    return roman >= len(letters) * 0.5
+
+
+def _roman_to_katakana(roman_text: str) -> str:
+    """ローマ字文字列をカタカナに変換（romkan2 使用）。スペースは区切りとして残す"""
+    parts = roman_text.split()
+    result = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            result.append(romkan2.to_katakana(part.lower()))
+        except Exception:
+            result.append(part)
+    return " ".join(result)
+
+
+async def name_to_katakana(name: str) -> str:
+    """氏名をカタカナに変換。翻訳APIが動かない場合はローマ字を無理やりカタカナに変換する"""
+    if not name or not name.strip():
+        return ""
+    # 1) 翻訳APIで日本語化してからひらがな→カタカナ
+    try:
+        translated_ja = await translate_text(name, target_lang="ja")
+        if translated_ja:
+            katakana = hiragana_to_katakana(translated_ja)
+            if not _is_mostly_roman(katakana):
+                return katakana
+    except Exception:
+        pass
+    # 2) 翻訳が使えない or 結果がローマ字のまま → romkan2 でローマ字→カタカナ
+    return _roman_to_katakana(name)
+
+
+def replace_in_docx_keeping_style(doc, replacements: dict):
+    """docx内の全段落・表セルのテキストを置換する。run単位で置換し、残りは段落単位で置換（複数runに分かれているプレースホルダも確実に置換）"""
+    for placeholder, value in replacements.items():
+        if value is None:
+            value = ""
+        value = str(value)
+        # 1) run単位で置換（書式保持）
+        for p in doc.paragraphs:
+            for run in p.runs:
+                if placeholder in run.text:
+                    run.text = run.text.replace(placeholder, value)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        for run in p.runs:
+                            if placeholder in run.text:
+                                run.text = run.text.replace(placeholder, value)
+        # 2) 段落全体でまだ残っていれば置換（複数runに分かれている場合のフォールバック）
+        for p in doc.paragraphs:
+            if placeholder in p.text:
+                p.text = p.text.replace(placeholder, value)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        if placeholder in p.text:
+                            p.text = p.text.replace(placeholder, value)
+
+
+# ファイル名を安全な形式に変換
+def sanitize_filename(filename: str, max_length: int = 100) -> str:
+    """ファイル名から特殊文字を削除し、安全な形式に変換"""
+    # 特殊文字を削除または置換
+    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    for char in invalid_chars:
+        filename = filename.replace(char, '')
+    # 空白をハイフンに置換
+    filename = filename.replace(' ', '-')
+    # 連続するハイフンを1つに
+    while '--' in filename:
+        filename = filename.replace('--', '-')
+    # 先頭・末尾のハイフンを削除
+    filename = filename.strip('-')
+    # 最大長を制限
+    if len(filename) > max_length:
+        filename = filename[:max_length]
+    return filename
+
+# 出力ファイル名を生成
+def generate_output_filename(company_name: str, file_type: str) -> str:
+    """会社名と日付を含む出力ファイル名を生成"""
+    date_str = datetime.now().strftime("%Y%m%d")
+    safe_company_name = sanitize_filename(company_name)
+    return f"{safe_company_name}-{date_str}-{file_type}"
+
+def send_slack_notification(message: str):
+    payload = {"text": message}
+    try:
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"Slack通知エラー: {e}")
+
+# リンク送信
+# def upload_file_to_slack(endpoint: str, title: str):
+#     slack_api_url = "https://slack.com/api/chat.postMessage"
+#     download_url = f"https://onestopjpn.onrender.com/{endpoint}"  # ←本番URLに変更してください
+
+#     headers = {
+#         "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+#         "Content-Type": "application/json"
+#     }
+
+#     message = {
+#         "channel": SLACK_USER_ID,
+#         "text": f":white_check_mark: {title} を生成しました。\n📎 ダウンロード: <{download_url}>"
+#     }
+
+#     try:
+#         response = requests.post(slack_api_url, headers=headers, json=message)
+#         result = response.json()
+#         print("Slack chat.postMessage response:", result)
+#         if not result.get("ok"):
+#             print(f"Slackメッセージ送信失敗: {result.get('error')}")
+#     except Exception as e:
+#         print("Slackメッセージ送信エラー:", e)
+
+def upload_file_to_slack(filepath: str, title: str):
+    print(f"📎 ファイルアップロード処理を開始：{filepath} → {SLACK_USER_ID}")
+    with open(filepath, "rb") as file_content:
+        response = requests.post(
+            "https://slack.com/api/files.upload",
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            files={"file": (filepath, file_content)},
+            data={
+                "channels": SLACK_USER_ID,
+                "title": title,
+                "filename": filepath,
+            }
+        )
+    res_json = response.json()
+    if res_json.get("ok"):
+        print(f"✅ ファイルアップロード成功（{title}）")
+    else:
+        print(f"❌ Slackファイルアップロード失敗: {res_json}")
+
+def get_google_drive_service():
+    """Google Drive APIサービスを取得"""
+    try:
+        # 認証情報ファイルの存在確認
+        credentials_path = os.path.abspath(GOOGLE_DRIVE_CREDENTIALS_PATH)
+        if not os.path.exists(credentials_path):
+            raise FileNotFoundError(
+                f"認証情報ファイルが見つかりません: {credentials_path}\n"
+                f"現在の作業ディレクトリ: {os.getcwd()}\n"
+                f"設定されたパス: {GOOGLE_DRIVE_CREDENTIALS_PATH}"
+            )
+        
+        print(f"✅ 認証情報ファイルを読み込み: {credentials_path}")
+        
+        creds = service_account.Credentials.from_service_account_file(
+            credentials_path,
+            scopes=['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets']
+        )
+        
+        # HTTPクライアントにタイムアウト設定を追加
+        http = httplib2.Http(timeout=300)  # 5分
+        authorized_http = AuthorizedHttp(creds, http=http)
+        
+        return build('drive', 'v3', http=authorized_http)
+    except Exception as e:
+        print(f"❌ Google Drive認証エラー: {e}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        raise
+
+def get_google_sheets_service():
+    """Google Sheets APIサービスを取得"""
+    try:
+        # 認証情報ファイルの存在確認
+        credentials_path = os.path.abspath(GOOGLE_DRIVE_CREDENTIALS_PATH)
+        if not os.path.exists(credentials_path):
+            raise FileNotFoundError(
+                f"認証情報ファイルが見つかりません: {credentials_path}\n"
+                f"現在の作業ディレクトリ: {os.getcwd()}\n"
+                f"設定されたパス: {GOOGLE_DRIVE_CREDENTIALS_PATH}"
+            )
+        
+        creds = service_account.Credentials.from_service_account_file(
+            credentials_path,
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
+        
+        # HTTPクライアントにタイムアウト設定を追加
+        http = httplib2.Http(timeout=300)  # 5分
+        authorized_http = AuthorizedHttp(creds, http=http)
+        
+        return build('sheets', 'v4', http=authorized_http)
+    except Exception as e:
+        print(f"❌ Google Sheets認証エラー: {e}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        raise
+
+async def create_company_folder(company_name: str) -> str:
+    """会社名のフォルダをGoogleドライブに作成（重複チェック付き、リトライ付き）"""
+    max_retries = 3
+    delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            drive_service = get_google_drive_service()
+            
+            # フォルダ名を安全な形式に変換
+            safe_folder_name = sanitize_filename(company_name)
+            
+            # 既存のフォルダを検索（重複チェック）
+            query = f"name='{safe_folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            if GOOGLE_DRIVE_FOLDER_ID:
+                query += f" and '{GOOGLE_DRIVE_FOLDER_ID}' in parents"
+            
+            try:
+                results = drive_service.files().list(
+                    q=query,
+                    fields='files(id, name)',
+                    pageSize=1
+                ).execute()
+                
+                items = results.get('files', [])
+                if items:
+                    # 既存のフォルダが見つかった場合はそのIDを返す
+                    folder_id = items[0]['id']
+                    print(f"✅ 既存のフォルダを使用: {safe_folder_name} (ID: {folder_id})")
+                    return folder_id
+            except Exception as search_error:
+                # 検索エラーが発生した場合は、新規作成を試みる
+                print(f"⚠️ フォルダ検索エラー（新規作成を試みます）: {search_error}")
+            
+            # フォルダが存在しない場合は新規作成
+            folder_metadata = {
+                'name': safe_folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            
+            # 親フォルダIDが設定されている場合は指定
+            if GOOGLE_DRIVE_FOLDER_ID:
+                folder_metadata['parents'] = [GOOGLE_DRIVE_FOLDER_ID]
+            
+            # フォルダを作成
+            folder = drive_service.files().create(
+                body=folder_metadata,
+                fields='id'
+            ).execute()
+            
+            folder_id = folder.get('id')
+            print(f"✅ Googleドライブフォルダ作成成功: {safe_folder_name} (ID: {folder_id})")
+            return folder_id
+        except HttpError as e:
+            # Google Drive APIが有効化されていない場合のエラー
+            if e.resp.status == 403 and 'accessNotConfigured' in str(e):
+                error_msg = (
+                    f"❌ Google Drive APIが有効化されていません。\n"
+                    f"以下のURLからGoogle Drive APIを有効化してください：\n"
+                    f"https://console.developers.google.com/apis/api/drive.googleapis.com/overview\n"
+                    f"エラー詳細: {e}"
+                )
+                print(error_msg)
+                raise Exception(error_msg) from e
+            # その他のHttpError（権限エラーなど）
+            if attempt < max_retries - 1:
+                print(f"⚠️ Googleドライブ接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                print(f"エラー詳細: {e}")
+                await asyncio.sleep(delay)
+                delay *= 2  # 指数バックオフ
+            else:
+                print(f"❌ Googleドライブ接続失敗（{max_retries}回試行後）: {e}")
+                raise
+        except (OSError, Exception) as e:
+            # 接続タイムアウトなどのネットワークエラー
+            is_timeout = "10060" in str(e) or "timeout" in str(e).lower() or "ConnectTimeout" in str(type(e).__name__)
+            if is_timeout and attempt < max_retries - 1:
+                print(f"⚠️ Googleドライブ接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                await asyncio.sleep(delay)
+                delay *= 2  # 指数バックオフ
+            else:
+                print(f"❌ Googleドライブ接続失敗（{max_retries}回試行後）: {e}")
+                raise
+
+async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = None) -> str:
+    """ファイルをGoogleドライブにアップロード（リトライ付き）"""
+    # デバッグ情報を出力
+    print(f"🔍 デバッグ情報:")
+    print(f"  - ファイルパス: {file_path}")
+    print(f"  - フォルダID: {folder_id}")
+    print(f"  - ファイル名: {file_name if file_name else '(未指定)'}")
+    print(f"  - GOOGLE_DRIVE_FOLDER_ID設定値: {GOOGLE_DRIVE_FOLDER_ID if GOOGLE_DRIVE_FOLDER_ID else '(未設定)'}")
+    
+    if not folder_id:
+        raise ValueError("フォルダIDが指定されていません。GOOGLE_DRIVE_FOLDER_IDを確認してください。")
+    
+    max_retries = 3
+    delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            drive_service = get_google_drive_service()
+            
+            if file_name is None:
+                file_name = os.path.basename(file_path)
+            
+            # ファイルメタデータ
+            file_metadata = {
+                'name': file_name,
+                'parents': [folder_id]
+            }
+            
+            # ファイルをアップロード
+            media = MediaFileUpload(file_path, resumable=True)
+            file = drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+            
+            file_id = file.get('id')
+            print(f"✅ Googleドライブファイルアップロード成功: {file_name} (ID: {file_id})")
+            return file_id
+        except HttpError as e:
+            # Google Drive APIが有効化されていない場合のエラー
+            if e.resp.status == 403 and 'accessNotConfigured' in str(e):
+                error_msg = (
+                    f"❌ Google Drive APIが有効化されていません。\n"
+                    f"以下のURLからGoogle Drive APIを有効化してください：\n"
+                    f"https://console.developers.google.com/apis/api/drive.googleapis.com/overview\n"
+                    f"エラー詳細: {e}"
+                )
+                print(error_msg)
+                raise Exception(error_msg) from e
+            # ストレージクォータ超過エラー（アップロード先がサービスアカウント所有だと発生）
+            if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
+                error_msg = (
+                    f"❌ サービスアカウントにはストレージクォータがありません。\n"
+                    f"GOOGLE_DRIVE_FOLDER_ID には、**ご自身のGoogleドライブで作成したフォルダ**のIDを指定してください。\n"
+                    f"（このアプリで作成したフォルダや、サービスアカウントが作成したフォルダは使用できません。）\n"
+                    f"手順: ご自身のドライブで新規フォルダを作成 → そのフォルダをサービスアカウントのメールに「編集者」で共有 → フォルダURLのIDを .env の GOOGLE_DRIVE_FOLDER_ID に設定。\n"
+                    f"エラー詳細: {e}"
+                )
+                print(error_msg)
+                # このエラーはリトライしても解決しないため、即座に例外を投げる
+                raise Exception(error_msg) from e
+            # その他のHttpError（権限エラーなど）
+            if attempt < max_retries - 1:
+                print(f"⚠️ Googleドライブアップロード接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                print(f"エラー詳細: {e}")
+                await asyncio.sleep(delay)
+                delay *= 2  # 指数バックオフ
+            else:
+                print(f"❌ Googleドライブアップロード接続失敗（{max_retries}回試行後）: {e}")
+                raise
+        except (OSError, Exception) as e:
+            # 接続タイムアウトなどのネットワークエラー
+            is_timeout = "10060" in str(e) or "timeout" in str(e).lower() or "ConnectTimeout" in str(type(e).__name__)
+            if is_timeout and attempt < max_retries - 1:
+                print(f"⚠️ Googleドライブアップロード接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                await asyncio.sleep(delay)
+                delay *= 2  # 指数バックオフ
+            else:
+                print(f"❌ Googleドライブアップロード接続失敗（{max_retries}回試行後）: {e}")
+                raise
+
+def append_to_spreadsheet(data: FormData, file_paths: dict = None):
+    """Spreadsheetに回答情報を追加"""
+    try:
+        if not GOOGLE_SHEETS_SPREADSHEET_ID:
+            print("⚠️ Spreadsheet IDが設定されていません。スキップします。")
+            return
+        
+        sheets_service = get_google_sheets_service()
+        
+        # 現在の日時
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 行データを準備（スプレッドシートの列順に合わせる）
+        # CreatedDate, CompanyName, RepresentativeName, RepresentativeBirthDay, 
+        # RepresentativeAddress, BusinessPurpose1-5, Email Address
+        row_data = [
+            current_datetime,  # CreatedDate
+            data.companyName,  # CompanyName
+            data.presidentName,  # RepresentativeName
+            f"{data.birthyear}-{data.birthmonth:02d}-{data.birthday:02d}",  # RepresentativeBirthDay
+            data.presidentAddress,  # RepresentativeAddress
+            data.purpose1,  # BusinessPurpose1
+            data.purpose2,  # BusinessPurpose2
+            data.purpose3,  # BusinessPurpose3
+            data.purpose4,  # BusinessPurpose4
+            data.purpose5,  # BusinessPurpose5
+            data.email,  # Email Address
+        ]
+        
+        # Spreadsheetに追加（ヘッダー行の下に追加）
+        body = {
+            'values': [row_data]
+        }
+        
+        result = sheets_service.spreadsheets().values().append(
+            spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+            range='A2',  # ヘッダー行（A1）の下から開始
+            valueInputOption='RAW',
+            insertDataOption='INSERT_ROWS',
+            body=body
+        ).execute()
+        
+        print(f"✅ Spreadsheet記録成功: {result.get('updates').get('updatedCells')} セル更新")
+    except Exception as e:
+        print(f"❌ Spreadsheet記録エラー: {e}")
+        # エラーが発生しても処理を続行
+
+
+# 新テンプレート（temporary フォルダ）のパス
+_TEMPORARY_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "temporary"))
+REGISTRATION_TEMPLATE_NEW = os.path.join(_TEMPORARY_DIR, "★❷(A商号)_登記申請_20250827_テンプレート_v1.0.docx")
+
+# 登記申請
+@app.post("/generate-registration-application")
+async def generate_registration_application(data: FormData):
+    if os.path.exists(REGISTRATION_TEMPLATE_NEW):
+        template_path = REGISTRATION_TEMPLATE_NEW
+    else:
+        template_path = "template-word-registration-application.docx"
+        if not os.path.exists(template_path) and TEMPLATE_DIR:
+            template_path = os.path.join(TEMPLATE_DIR, template_path)
+
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=500, detail="Template file not found")
+    try:
+        doc = Document(template_path)
+    except Exception as e:
+        doc = Document(os.path.join(TEMPLATE_DIR, template_path) if TEMPLATE_DIR else template_path)
+
+    output_path = generate_output_filename(data.companyName, "registration-application.docx")
+
+    # 登記申請で置換する対象: (A商号), (A商号のフリガナ), (C社員住所), (D社員氏名・カタカナ), (D社員氏名・英語)
+    # フリガナ・住所・氏名カタカナは、API失敗時も romkan2 で無理やりカタカナに変換
+    translated_company_name = await name_to_katakana(data.companyName)
+    katakana_president_name = await name_to_katakana(data.presidentName)
+    address_katakana = get_japanese_address_katakana_safe(data.presidentAddress)
+
+    replacements = {
+        "(A商号)": data.companyName,
+        "(A商号のフリガナ)": translated_company_name,
+        "(C社員住所)": address_katakana,
+        "(D社員氏名・カタカナ)": katakana_president_name,
+        "(D社員氏名・英語)": data.presidentName,
+    }
+    replace_in_docx_keeping_style(doc, replacements)
+
+    # 生成された Word ファイルを保存
+    print(f"✅ Wordファイルを保存: {output_path}")
+    doc.save(output_path)
+
+    # Googleドライブにアップロード
+    try:
+        if not GOOGLE_DRIVE_FOLDER_ID:
+            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。")
+            print("   .envファイルに以下を追加してください：")
+            print("   GOOGLE_DRIVE_FOLDER_ID=your-folder-id")
+            print("   ※フォルダIDは、Googleドライブでフォルダを開いた際のURLから取得できます")
+            print("   ※例: https://drive.google.com/drive/folders/1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            print("⚠️ ファイルアップロードをスキップします")
+        else:
+            print(f"✅ GOOGLE_DRIVE_FOLDER_ID: {GOOGLE_DRIVE_FOLDER_ID}")
+            file_name = os.path.basename(output_path)
+            file_id = await upload_file_to_drive(output_path, GOOGLE_DRIVE_FOLDER_ID, file_name)
+            print(f"✅ Googleドライブにアップロード完了: {file_id}")
+    except Exception as e:
+        print(f"⚠️ Googleドライブアップロードエラー（処理は続行）: {e}")
+
+    return {"message": "Registration application generated", "filename": output_path}
+
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_registration.docx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # }
+
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+@app.get("/download-registration-application")
+def download_registration_application(filename: str):
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    
+    file_path = filename
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        with open(file_path, "rb") as file:
+            file_stream = BytesIO(file.read())
+    except Exception as e:
+        with open(os.path.join(TEMPLATE_DIR, file_path), "rb") as file:
+            file_stream = BytesIO(file.read())
+
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+    return Response(content=file_stream.getvalue(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+# 定款（新テンプレート: temporary/★❶(A商号)_定款_20250827_テンプレート_v1.0.docx を優先）
+ARTICLE_TEMPLATE_NEW = os.path.join(_TEMPORARY_DIR, "★❶(A商号)_定款_20250827_テンプレート_v1.0.docx")
+
+# 定款作成
+@app.post("/generate-article-of-incorporation")
+async def generate_article_of_incorporation(data: FormData):
+    if os.path.exists(ARTICLE_TEMPLATE_NEW):
+        template_path = ARTICLE_TEMPLATE_NEW
+    else:
+        template_path = "template-word-article-of-incorporation.docx"
+        if not os.path.exists(template_path) and TEMPLATE_DIR:
+            template_path = os.path.join(TEMPLATE_DIR, template_path)
+
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=500, detail="Template file not found")
+    try:
+        doc = Document(template_path)
+    except Exception as e:
+        doc = Document(os.path.join(TEMPLATE_DIR, template_path) if TEMPLATE_DIR else template_path)
+
+    output_path = generate_output_filename(data.companyName, "article-of-incorporation.docx")
+
+    # 定款で置換する対象: (A商号), (B目的1)~(B目的5), (C社員住所), (D社員氏名・カタカナ)。(D社員氏名・カタカナ)は翻訳失敗時も romkan2 で変換
+    katakana_president_name = await name_to_katakana(data.presidentName)
+    address_katakana = get_japanese_address_katakana_safe(data.presidentAddress)
+    translated_purpose = await translate_text(data.purpose1)
+    translated_purpose2 = await translate_text(data.purpose2)
+    translated_purpose3 = await translate_text(data.purpose3)
+    translated_purpose4 = await translate_text(data.purpose4)
+    translated_purpose5 = await translate_text(data.purpose5)
+
+    replacements = {
+        "(A商号)": data.companyName,
+        "(B目的1)": translated_purpose,
+        "(B目的2)": translated_purpose2,
+        "(B目的3)": translated_purpose3,
+        "(B目的4)": translated_purpose4,
+        "(B目的5)": translated_purpose5,
+        "(C社員住所)": address_katakana,
+        "(D社員氏名・カタカナ)": katakana_president_name,
+    }
+    replace_in_docx_keeping_style(doc, replacements)
+
+    # 生成された Word ファイルを保存
+    doc.save(output_path)
+    
+    # Googleドライブにアップロード
+    try:
+        if not GOOGLE_DRIVE_FOLDER_ID:
+            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。")
+            print("   .envファイルに以下を追加してください：")
+            print("   GOOGLE_DRIVE_FOLDER_ID=your-folder-id")
+            print("   ※フォルダIDは、Googleドライブでフォルダを開いた際のURLから取得できます")
+            print("   ※例: https://drive.google.com/drive/folders/1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            print("⚠️ ファイルアップロードをスキップします")
+        else:
+            print(f"✅ GOOGLE_DRIVE_FOLDER_ID: {GOOGLE_DRIVE_FOLDER_ID}")
+            file_name = os.path.basename(output_path)
+            file_id = await upload_file_to_drive(output_path, GOOGLE_DRIVE_FOLDER_ID, file_name)
+            print(f"✅ Googleドライブにアップロード完了: {file_id}")
+    except Exception as e:
+        print(f"⚠️ Googleドライブアップロードエラー（処理は続行）: {e}")
+
+    return {"message": "Article of incorporation generated", "filename": output_path}
+
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_incorparticles.docx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # }
+
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+@app.get("/download-article-of-incorporation")
+def download_article_of_incorporation(filename: str):
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    
+    file_path = filename
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    with open(file_path, "rb") as file:
+        file_stream = BytesIO(file.read())
+
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+    return Response(content=file_stream.getvalue(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+# 印鑑届出書（新テンプレート: temporary/★❸(A商号)_印鑑届書_20250827_テンプレート_v1.0.xlsx を優先）
+SEAL_TEMPLATE_NEW = os.path.join(_TEMPORARY_DIR, "★❸(A商号)_印鑑届書_20250827_テンプレート_v1.0.xlsx")
+
+@app.post("/generate-seal-registration")
+async def generate_seal_registration(data: FormData):
+    if os.path.exists(SEAL_TEMPLATE_NEW):
+        template_path = SEAL_TEMPLATE_NEW
+    else:
+        template_path = "template-excel-seal-registration.xlsx"
+        if not os.path.exists(template_path) and TEMPLATE_DIR:
+            template_path = os.path.join(TEMPLATE_DIR, "template-excel-seal-registration.xlsx")
+
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=500, detail="Excel template file not found")
+
+    wb = load_workbook(template_path)
+    ws = wb.active
+
+    # 氏名・(A商号のフリガナ)・(C社員住所)は、API失敗時も romkan2 で無理やりカタカナに変換
+    katakana_president_name = await name_to_katakana(data.presidentName)
+    address_katakana = get_japanese_address_katakana_safe(data.presidentAddress)
+    birth_str = str(data.birthyear) + "年" + str(data.birthmonth) + "月" + str(data.birthday) + "日"
+
+    if template_path == SEAL_TEMPLATE_NEW:
+        # 印鑑届書で置換する対象: (A商号), (A商号のフリガナ), (C社員住所), (D社員氏名・カタカナ), (D社員氏名・英語), (E社員生年月日)
+        translated_company_name = await name_to_katakana(data.companyName)
+        replacements = {
+            "(A商号)": data.companyName,
+            "(A商号のフリガナ)": translated_company_name,
+            "(C社員住所)": address_katakana,
+            "(D社員氏名・カタカナ)": katakana_president_name,
+            "(D社員氏名・英語)": data.presidentName,
+            "(E社員生年月日)": birth_str,
+        }
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str):
+                        for ph, value in replacements.items():
+                            if ph in cell.value:
+                                cell.value = cell.value.replace(ph, value)
+    else:
+        # 旧テンプレート: 固定セルに設定
+        def set_merged_cell_value(ws, cell_range, value):
+            is_merged = False
+            for merged_range in ws.merged_cells.ranges:
+                if str(merged_range) == cell_range:
+                    is_merged = True
+                    break
+            if is_merged:
+                ws.unmerge_cells(cell_range)
+            start_cell = cell_range.split(":")[0]
+            ws[start_cell] = value
+            if is_merged:
+                ws.merge_cells(cell_range)
+
+        set_merged_cell_value(ws, "AH7:BC9", data.companyName)
+        set_merged_cell_value(ws, "P52:BC52", address_katakana)
+        set_merged_cell_value(ws, "AH18:BC21", katakana_president_name)
+        set_merged_cell_value(ws, "P53:BC53", katakana_president_name)
+        set_merged_cell_value(ws, "AH22:BC24", birth_str)
+
+    output_path = generate_output_filename(data.companyName, "seal-registration.xlsx")
+    wb.save(output_path)
+
+    # Googleドライブにアップロード
+    try:
+        if not GOOGLE_DRIVE_FOLDER_ID:
+            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。")
+            print("   .envファイルに以下を追加してください：")
+            print("   GOOGLE_DRIVE_FOLDER_ID=your-folder-id")
+            print("   ※フォルダIDは、Googleドライブでフォルダを開いた際のURLから取得できます")
+            print("   ※例: https://drive.google.com/drive/folders/1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            print("⚠️ ファイルアップロードをスキップします")
+        else:
+            print(f"✅ GOOGLE_DRIVE_FOLDER_ID: {GOOGLE_DRIVE_FOLDER_ID}")
+            file_name = os.path.basename(output_path)
+            file_id = await upload_file_to_drive(output_path, GOOGLE_DRIVE_FOLDER_ID, file_name)
+            print(f"✅ Googleドライブにアップロード完了: {file_id}")
+    except Exception as e:
+        print(f"⚠️ Googleドライブアップロードエラー（処理は続行）: {e}")
+
+    return {"message": "Seal registration file generated", "filename": output_path}
+
+    # headers = {
+    #     "Content-Disposition": "attachment; filename=created_corporation_application.xlsx",
+    #     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # }
+
+    # with open(output_path, "rb") as file:
+    #     return Response(content=file.read(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+@app.get("/download-seal-registration")
+def download_seal_registration(filename: str):
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    
+    file_path = filename
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    with open(file_path, "rb") as file:
+        file_stream = BytesIO(file.read())
+
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    }
+    return Response(content=file_stream.getvalue(), headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+# Spreadsheetに記録
+@app.post("/record-to-spreadsheet")
+def record_to_spreadsheet(data: FormData):
+    """3つのファイル生成後にSpreadsheetに記録"""
+    try:
+        append_to_spreadsheet(data)
+        return {"message": "Recorded to spreadsheet successfully"}
+    except Exception as error:
+        print(f"⚠️ Spreadsheet記録エラー: {error}")
+        # エラーが発生しても処理を続行
+        return {"message": "Spreadsheet recording failed but continuing", "error": str(error)}
+
+
+async def _background_submit_task(data: FormData) -> None:
+    """申請受付後のバックグラウンド処理: 3ファイル生成・Driveアップロード・Spreadsheet記録"""
+    try:
+        try:
+            await generate_registration_application(data)
+        except Exception as e:
+            print(f"⚠️ 登記申請書生成エラー: {e}")
+        try:
+            await generate_article_of_incorporation(data)
+        except Exception as e:
+            print(f"⚠️ 定款生成エラー: {e}")
+        try:
+            await generate_seal_registration(data)
+        except Exception as e:
+            print(f"⚠️ 印鑑届出書生成エラー: {e}")
+        try:
+            append_to_spreadsheet(data)
+        except Exception as e:
+            print(f"⚠️ Spreadsheet記録エラー: {e}")
+    except Exception as e:
+        print(f"⚠️ バックグラウンド処理で予期せぬエラー: {e}")
+
+
+@app.post("/submit-application")
+async def submit_application(data: FormData):
+    """申請を受理し即座に200を返し、ファイル生成・Drive・Spreadsheetはバックグラウンドで実行"""
+    asyncio.create_task(_background_submit_task(data))
+    return {"message": "accepted"}
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "10000"))  # Render の環境変数から取得
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+

@@ -1,0 +1,91 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 認証情報・秘密鍵・環境変数
+.env
+.env.local
+.env.development
+.env.production
+# サンプルはリポジトリに含める
+!.env.example
+
+# Google サービスアカウント JSON
+*credentials*.json
+*credential*.json
+companyestablishsupport-a633c02517ff.json
+*-*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# Render 用 secret のローカルバックアップ（使っている場合）
+secrets/
+secrets/**
+
+# 生成されたファイル（ローカル開発用）
+*.docx
+*.xlsx
+!template*.docx
+!template*.xlsx
+!★*.docx
+!★*.xlsx
+
+# ログファイル
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 一時ファイル
+temporary/
+temp/
+*.tmp
+
+# Node / フロントエンド
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.npm
+*.tsbuildinfo
+
+# ローカル用バックアップ・一時ドキュメント（Git に含めない）
+backup/
+*-local.md
+*.local.md
+
+
+

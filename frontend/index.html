@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Registration Form</title>
+    <link rel="stylesheet" href="/style.css" type="text/css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="language-switcher">
+            <button id="lang-toggle" type="button" onclick="toggleLanguage()">
+                <span class="lang-label-ja">JA</span>
+                <span class="lang-toggle-knob"></span>
+                <span class="lang-label-en">EN</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="page-container">
+        <!-- ページ1: ランディング -->
+        <div id="page-landing" class="page">
+            <div class="page-inner">
+                <h1 data-i18n="page1Title">One-Stop incで法人設立の申請をする</h1>
+                <p class="description" data-i18n="page1Description">法人設立の申請を行います。よろしければ「はい」を押してフォームへ進んでください。</p>
+                <div class="button-row">
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick="location.hash='#/form'"
+                        data-i18n="page1Yes"
+                    >
+                        はい
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ページ2: フォーム入力 -->
+        <div id="page-form" class="page">
+            <div class="page-inner">
+                <div class="form-header">
+                    <h1 data-i18n="title">One-stop Inc. Japan</h1>
+                    <p class="description" data-i18n="description">Simply fill out the form below, and we will help you establish your company in Japan seamlessly.</p>
+                </div>
+
+                <form id="companyForm">
+                    <label for="companyName" data-i18n="companyName" class="label-with-tooltip">
+                        <span class="label-text">Company Name</span>
+                        <span class="tooltip-icon" data-tooltip-key="companyNameTooltip">?</span>
+                        <span class="tooltip-text" data-i18n-tooltip="companyNameTooltip"></span>
+                    </label>
+                    <input type="text" id="companyName" data-i18n-placeholder="placeholderCompanyName" placeholder="">
+
+                    <label for="presidentName" data-i18n="presidentName" class="label-with-tooltip">
+                        <span class="label-text">Representative Name</span>
+                        <span class="tooltip-icon" data-tooltip-key="presidentNameTooltip">?</span>
+                        <span class="tooltip-text" data-i18n-tooltip="presidentNameTooltip"></span>
+                    </label>
+                    <input type="text" id="presidentName" data-i18n-placeholder="placeholderPresidentName" placeholder="John Doe">
+
+                    <label for="presidentBday" data-i18n="presidentBirthDay">Representative Birth Day</label>
+                    <div class="input-group">
+                        <input type="text" id="birthyear" data-i18n-placeholder="placeholderYear" placeholder="yyyy">
+                        <input type="text" id="birthmonth" data-i18n-placeholder="placeholderMonth" placeholder="mm">
+                        <input type="text" id="birthday" data-i18n-placeholder="placeholderDay" placeholder="dd">
+                    </div>
+
+                    <label for="presidentAddress" data-i18n="presidentAddress" class="label-with-tooltip">
+                        <span class="label-text">Representative Address</span>
+                        <span class="tooltip-icon" data-tooltip-key="presidentAddressTooltip">?</span>
+                        <span class="tooltip-text" data-i18n-tooltip="presidentAddressTooltip"></span>
+                    </label>
+                    <input type="text" id="presidentAddress" data-i18n-placeholder="placeholderPresidentAddress" placeholder="9-8-7 bef Apartment, Chiyoda, Tokyo">
+
+                    <label for="purpose1" data-i18n="businessPurpose1">Business Purpose 1</label>
+                    <input type="text" id="purpose1" data-i18n-placeholder="placeholderPurpose1" placeholder="e.g., IT consulting business">
+
+                    <label for="purpose2" data-i18n="businessPurpose2">Business Purpose 2</label>
+                    <input type="text" id="purpose2" data-i18n-placeholder="placeholderPurpose2" placeholder="e.g., Software development business" value="">
+
+                    <label for="purpose3" data-i18n="businessPurpose3">Business Purpose 3</label>
+                    <input type="text" id="purpose3" data-i18n-placeholder="placeholderPurpose3" placeholder="e.g., System integration business" value="">
+
+                    <label for="purpose4" data-i18n="businessPurpose4">Business Purpose 4</label>
+                    <input type="text" id="purpose4" data-i18n-placeholder="placeholderPurpose4" placeholder="e.g., Data analysis business" value="">
+
+                    <label for="purpose5" data-i18n="businessPurpose5">Business Purpose 5</label>
+                    <input type="text" id="purpose5" data-i18n-placeholder="placeholderPurpose5" placeholder="e.g., Cloud services business" value="">
+
+                    <label for="email" data-i18n="email">Email Address</label>
+                    <input type="email" id="email" data-i18n-placeholder="placeholderEmail" placeholder="example@email.com">
+
+                    <div id="loader" style="display: none;" class="loader-container">
+                        <div class="loader"></div>
+                        <span class="loadermessage" data-i18n="generating">  Generating...</span>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-primary" onclick="submitForm()" data-i18n="submit">Submit</button>
+                    </div>
+                </form>
+
+                <p id="downloadMessage" style="display: none;" data-i18n="downloadMessage">Your documents are ready!! Please download them below.</p>
+                <div class="download-buttons">
+                    <button id="downloadWordButton" type="button" onclick="downloadWordFile()" style="display: none;" data-i18n="downloadWord">Company Registration</button>
+                    <button id="downloadWordButton2" type="button" onclick="downloadWordFile2()" style="display: none;" data-i18n="downloadWord2">Incorporation Articles</button>
+                    <button id="downloadExcelButton" type="button" onclick="downloadExcelFile()" style="display: none;" data-i18n="downloadExcel">Seal Registration</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ページ3: サンクス -->
+        <div id="page-thanks" class="page">
+            <div class="page-inner">
+                <h1 data-i18n="thanksTitle">申請ありがとうございます。</h1>
+                <p class="thanks-message" data-i18n="thanksMessage">準備が整い次第、こちらから連絡します。</p>
+                <div class="button-row">
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick="location.hash='#/'"
+                        data-i18n="backToHome"
+                    >
+                        ホームへ戻る
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p class="footer-text" data-i18n="copyright">© 2024 One-stop Inc. Japan. All rights reserved.</p>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+# Render Blueprint: 会社設立申請書自動入力 API
+# https://render.com/docs/blueprint-spec
+#
+# 使い方:
+# 1. GitHub にリポジトリを push
+# 2. Render ダッシュボードで "New" → "Blueprint"
+# 3. このリポジトリを接続して render.yaml を認識させる
+# 4. 環境変数をダッシュボードで設定（DEPLOY.md 参照）
+
+services:
+  - type: web
+    name: companyformautomation-api
+    runtime: python
+    region: singapore
+
+    # リポジトリルートではなく backend をルートとしてビルド
+    rootDir: backend
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: PORT
+        generateValue: true
+      # 以下は Render ダッシュボードの Environment で設定（Secret 推奨）
+      # GOOGLE_TRANSLATE_API_KEY
+      # GOOGLE_MAPS_API_KEY
+      # SLACK_WEBHOOK_URL
+      # SLACK_BOT_TOKEN
+      # SLACK_CHANNEL_ID
+      # SLACK_USER_ID
+      # GOOGLE_DRIVE_CREDENTIALS_PATH (または JSON を環境変数で渡す)
+      # GOOGLE_DRIVE_FOLDER_ID
+      # GOOGLE_SHEETS_SPREADSHEET_ID

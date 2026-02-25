@@ -1,0 +1,545 @@
+
+/* ページ切り替え: フェード＆スライドで高級感のあるトランジション */
+.page {
+    position: absolute;
+    inset: 0;
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    overflow-y: auto;
+}
+
+.page-visible {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.page-active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.page-leave {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+}
+
+.page-inner {
+    width: 100%;
+    max-width: 800px;
+    margin: 40px auto 40px;
+    padding: 24px 20px 32px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    box-sizing: border-box;
+}
+
+.form-header {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.thanks-message {
+    font-size: 16px;
+    color: #2c3e50;
+    text-align: center;
+    margin: 20px 0 24px;
+    padding: 0 10px;
+    line-height: 1.7;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 160px;
+    max-width: 240px;
+    width: auto;
+}
+
+@media (max-width: 480px) {
+    .btn-primary {
+        width: 100%;
+        max-width: none;
+    }
+}
+
+.button-row,
+.form-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+body {
+    font-family: 'Noto Sans JP', 'Helvetica Neue', 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+    margin: 0;
+    padding: 10px;
+    background-color: #f4f7f9;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    min-height: 100vh;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+.site-header {
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 8px 16px;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+.page-container {
+    flex: 1;
+    width: 100%;
+    position: relative;
+    min-height: 60vh;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* モバイルファースト: デフォルトはスマートフォン向け */
+@media (min-width: 768px) {
+    body {
+        margin: 0;
+        padding: 20px 40px;
+        align-items: center;
+    }
+}
+
+@media (min-width: 1024px) {
+    body {
+        margin: 0 10%;
+    }
+}
+
+h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    margin-top: 0;
+    text-align: center;
+    width: 100%;
+    padding: 10px 0 15px 0;
+    letter-spacing: 0.5px;
+}
+
+@media (min-width: 768px) {
+    h1 {
+        font-size: 28px;
+        margin-top: 20px;
+        margin-bottom: 16px;
+        padding: 10px 0 20px 0;
+    }
+}
+
+p.description {
+    font-size: 15px;
+    color: #555;
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 24px;
+    max-width: 100%;
+    font-weight: 400;
+    padding: 0 10px;
+    line-height: 1.6;
+}
+
+@media (min-width: 768px) {
+    p.description {
+        font-size: 16px;
+        margin-top: 8px;
+        margin-bottom: 24px;
+        padding: 0;
+    }
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+    width: 100%;
+    max-width: 100%;
+    background: transparent;
+    padding: 24px 0 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+}
+
+label {
+    font-weight: 600;
+    color: #34495e;
+    text-align: left;
+    width: 100%;
+    font-size: 14px;
+    margin-bottom: 6px;
+    display: block;
+}
+
+/* ツールチップ付きラベル */
+.label-with-tooltip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    flex-wrap: wrap;
+}
+
+.label-text {
+    flex: 0 0 auto;
+}
+
+/* ツールチップアイコン */
+.tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #e0e0e0;
+    color: #555;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: help;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.tooltip-icon:hover {
+    background-color: #4a90e2;
+    color: #ffffff;
+    transform: scale(1.1);
+}
+
+/* ツールチップテキスト */
+.tooltip-text {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    background-color: #2c3e50;
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    white-space: nowrap;
+    max-width: 300px;
+    white-space: normal;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-5px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.tooltip-text::before {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 12px;
+    border: 6px solid transparent;
+    border-bottom-color: #2c3e50;
+}
+
+.tooltip-icon:hover + .tooltip-text,
+.tooltip-text:hover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* モバイル対応 */
+@media (max-width: 767px) {
+    .tooltip-text {
+        max-width: 250px;
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+    
+    .tooltip-icon {
+        width: 20px;
+        height: 20px;
+        font-size: 13px;
+    }
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.input-group input {
+    flex: 1;
+}
+
+input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1.5px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background-color: #ffffff;
+    color: #2c3e50;
+}
+
+input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+input::placeholder {
+    color: #95a5a6;
+    font-weight: 400;
+}
+
+/* モバイルでタッチしやすいサイズを確保 */
+@media (max-width: 767px) {
+    input {
+        font-size: 16px; /* iOSでズームを防ぐ */
+        min-height: 44px; /* タッチターゲットの最小サイズ */
+    }
+}
+
+button {
+    padding: 14px 24px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+    width: 100%;
+    min-height: 48px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+button:hover {
+    background: #0056b3;
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+button:active {
+    background: #004085;
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 123, 255, 0.2);
+}
+
+@media (min-width: 768px) {
+    button {
+        padding: 12px;
+    }
+}
+
+/* #downloadButton {
+    display: none;
+    margin-top: 10px;
+} */
+
+#downloadMessage {
+    color: #28a745;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    padding: 0 10px;
+    margin: 10px 0;
+}
+
+@media (min-width: 768px) {
+    #downloadMessage {
+        font-size: 16px;
+        padding: 0;
+    }
+}
+
+/* ボタンを横並びに配置し、Bootstrapのsuccessカラーを適用 */
+.download-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.download-buttons button {
+    display: none;
+    background-color: #28a745;
+    width: 100%;
+    padding: 12px 20px;
+    min-height: 44px;
+}
+
+.download-buttons button:hover {
+    background-color: #218838;
+}
+
+@media (min-width: 768px) {
+    .download-buttons {
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    .download-buttons button {
+        width: auto;
+        padding: 10px 20px;
+    }
+}
+
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.loader-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+}
+
+.loadermessage{
+    color:#0056b3;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 言語切り替えトグル */
+.language-switcher {
+    margin-left: auto;
+    z-index: 10;
+}
+
+#lang-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px;
+    min-width: 90px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: #f3f4f6;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    color: #4b5563;
+}
+
+.lang-label-ja,
+.lang-label-en {
+    flex: 1;
+    text-align: center;
+    z-index: 1;
+}
+
+.lang-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(50% - 4px);
+    height: calc(100% - 4px);
+    border-radius: 999px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+    transition: transform 0.2s ease;
+}
+
+#lang-toggle.is-en .lang-toggle-knob {
+    transform: translateX(100%);
+}
+
+#lang-toggle.is-ja .lang-toggle-knob {
+    transform: translateX(0%);
+}
+
+#lang-toggle.is-ja .lang-label-ja {
+    font-weight: 600;
+    color: #111827;
+}
+
+#lang-toggle.is-en .lang-label-en {
+    font-weight: 600;
+    color: #111827;
+}
+
+/* フッター */
+.footer {
+    width: 100%;
+    text-align: center;
+    padding: 20px 10px;
+    margin-top: 40px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #ffffff;
+}
+
+.footer-text {
+    font-size: 12px;
+    color: #95a5a6;
+    margin: 0;
+    padding: 0;
+    font-weight: 400;
+    letter-spacing: 0.3px;
+}
+
+@media (min-width: 768px) {
+    .footer {
+        padding: 24px 20px;
+        margin-top: 50px;
+    }
+
+    .footer-text {
+        font-size: 13px;
+    }
+}
