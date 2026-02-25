@@ -9,10 +9,13 @@ from io import BytesIO
 import os
 import re
 import asyncio
+import json
 from config import (
     GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_USER_ID,
     GOOGLE_DRIVE_CREDENTIALS_PATH, GOOGLE_DRIVE_FOLDER_ID, GOOGLE_SHEETS_SPREADSHEET_ID,
     TEMPLATE_DIR,
+    GOOGLE_DRIVE_OAUTH_CLIENT_ID, GOOGLE_DRIVE_OAUTH_CLIENT_SECRET, GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN,
+    GOOGLE_DRIVE_OAUTH_TOKEN_URI, GOOGLE_DRIVE_OAUTH_SCOPES,
 )
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,8 +26,10 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 import httplib2
 from google_auth_httplib2 import AuthorizedHttp
+from google.oauth2.credentials import Credentials as UserCredentials
 from googletrans import Translator
 import romkan2
+import config
 
 # TEMPLATE_DIR は config から取得（Render では backend のカレントディレクトリ）
 
@@ -111,6 +116,35 @@ def get_japanese_address_katakana_safe(address: str) -> str:
         pass
     return address
 
+
+async def get_address_katakana_for_documents(address: str) -> str:
+    """
+    文書用の住所カタカナ表記を取得する。
+    1. まず Maps API ベースの get_japanese_address_katakana_safe を試す
+       - 日本語住所が取得できた場合はそのカタカナ表記を利用
+    2. それでも日本語になっていない／失敗した場合は、英語住所に対して
+       translate_to_katakana_proper_noun を適用して固有名詞寄りのカタカナにする
+    3. 最後まで失敗した場合は元の住所文字列を返す
+    """
+    if not address or not address.strip():
+        return ""
+
+    # 1. 既存の安全な Maps ベース変換
+    base = get_japanese_address_katakana_safe(address)
+    if base and not _is_mostly_roman(base):
+        return base
+
+    # 2. 固有名詞寄りのカタカナ変換を試す（例: \"123 Main Street, Tokyo\" → \"123 メイン ストリート、トウキョウ\"）
+    try:
+        katakana = await translate_to_katakana_proper_noun(address)
+        if katakana:
+            return katakana
+    except Exception:
+        pass
+
+    # 3. すべて失敗した場合は元の住所を返す
+    return address
+
 # 翻訳関数
 async def translate_text(text: str, target_lang: str = "ja") -> str:
     # 空文字列の場合は空文字列を返す（エラーを投げない）
@@ -145,6 +179,40 @@ async def translate_text(text: str, target_lang: str = "ja") -> str:
                     print(f"❌ {error_detail}")
                     print(f"❌ Traceback: {error_traceback}")
                     raise HTTPException(status_code=500, detail=error_detail)
+
+
+async def translate_to_katakana_proper_noun(text: str) -> str:
+    """
+    固有名詞寄りのカタカナ表記を生成する。
+    - 既に日本語を含む場合: ひらがなのみカタカナにして返す
+    - 日本語を含まない場合: Google翻訳で日本語化 → ひらがなをカタカナに変換
+      （結果がほぼローマ字の場合は不自然とみなし、フォールバックへ）
+    - 翻訳に失敗／不自然な場合: romkan2 によるローマ字→カタカナ変換にフォールバック
+    """
+    if not text or not text.strip():
+        return ""
+
+    raw = text.strip()
+
+    # 既に日本語が含まれている場合は、ひらがなをカタカナに揃えて返す
+    if _contains_japanese(raw):
+        return hiragana_to_katakana(raw)
+
+    # 日本語を含まない場合は、まず翻訳 API を試す
+    try:
+        translated_ja = await translate_text(raw, target_lang="ja")
+        if translated_ja:
+            katakana = hiragana_to_katakana(translated_ja.replace(" ", ""))
+            # 結果がほぼローマ字なら不自然なのでフォールバックに回す
+            if not _is_mostly_roman(katakana):
+                return katakana
+    except Exception:
+        # 翻訳 API が失敗した場合はフォールバックに移行
+        pass
+
+    # フォールバック: romkan2 によるローマ字→カタカナ変換
+    return _roman_to_katakana(raw)
+
 
 # カタカナ変換用関数（ひらがなに変換してからカタカナに）
 async def to_katakana(text: str) -> str:
@@ -214,6 +282,40 @@ def _is_mostly_roman(text: str) -> bool:
     return roman >= len(letters) * 0.5
 
 
+def _contains_japanese(text: str) -> bool:
+    """文字列にひらがな・カタカナ・漢字が含まれているか判定"""
+    if not text:
+        return False
+    for ch in text:
+        code = ord(ch)
+        # ひらがな
+        if 0x3040 <= code <= 0x309F:
+            return True
+        # カタカナ
+        if 0x30A0 <= code <= 0x30FF:
+            return True
+        # CJK統合漢字
+        if 0x4E00 <= code <= 0x9FFF:
+            return True
+    return False
+
+
+def _is_japanese_token(token: str) -> bool:
+    """トークン単位で日本語（ひらがな・カタカナ・漢字）を含むかどうか"""
+    return _contains_japanese(token)
+
+
+def _is_latin_token(token: str) -> bool:
+    """トークンがローマ字のみ（A-Z, a-z と一部記号）かどうか"""
+    if not token:
+        return False
+    t = token.strip()
+    if not t:
+        return False
+    # アルファベットと一部の記号（' -）のみ許可
+    return re.fullmatch(r"[A-Za-z][A-Za-z'’-]*", t) is not None
+
+
 def _roman_to_katakana(roman_text: str) -> str:
     """ローマ字文字列をカタカナに変換（romkan2 使用）。スペースは区切りとして残す"""
     parts = roman_text.split()
@@ -229,22 +331,198 @@ def _roman_to_katakana(roman_text: str) -> str:
     return " ".join(result)
 
 
-async def name_to_katakana(name: str) -> str:
-    """氏名をカタカナに変換。翻訳APIが動かない場合はローマ字を無理やりカタカナに変換する"""
+def to_katakana_name(name: str) -> str:
+    """氏名・商号などの固有名詞を翻訳せずにカタカナ表記にする"""
     if not name or not name.strip():
         return ""
-    # 1) 翻訳APIで日本語化してからひらがな→カタカナ
-    try:
-        translated_ja = await translate_text(name, target_lang="ja")
-        if translated_ja:
-            katakana = hiragana_to_katakana(translated_ja)
-            if not _is_mostly_roman(katakana):
-                return katakana
-    except Exception:
-        pass
-    # 2) 翻訳が使えない or 結果がローマ字のまま → romkan2 でローマ字→カタカナ
-    return _roman_to_katakana(name)
+    text = name.strip()
+    # 既に日本語が含まれている場合は、ひらがなのみカタカナにして返す
+    if _contains_japanese(text):
+        return hiragana_to_katakana(text)
+    # ローマ字などのラテン文字のみの場合は romkan2 でカタカナに変換
+    return _roman_to_katakana(text)
 
+
+def _has_ascii_letters(text: str) -> bool:
+    """文字列中に ASCII 英字が含まれるかどうか"""
+    if not text:
+        return False
+    return any(("A" <= c <= "Z") or ("a" <= c <= "z") for c in text)
+
+
+async def roman_token_to_katakana_with_fallback(token: str) -> str:
+    """
+    ローマ字トークンをカタカナに変換する。
+    1. まず romkan2 で変換を試みる
+       - ASCII 英字が残らず、かつ元のトークンと明らかに異なる場合はその結果を採用
+    2. romkan2 でうまく変換できなかった場合のみ、
+       translate_to_katakana_proper_noun を使って固有名詞寄りのカタカナに変換する
+       - 結果に ASCII 英字が含まれる場合は不自然とみなし、採用しない
+    3. 最後までうまく変換できなければ元のトークンをそのまま返す
+    """
+    if not token:
+        return ""
+
+    t = token.strip()
+    if not t:
+        return ""
+
+    # 1. romkan2 による機械的なローマ字→カタカナ変換
+    try:
+        romkan_result = romkan2.to_katakana(t.lower())
+    except Exception:
+        romkan_result = t
+
+    if romkan_result and not _has_ascii_letters(romkan_result) and romkan_result.lower() != t.lower():
+        return romkan_result
+
+    # 2. romkan2 がうまく変換できなかった場合のみ、翻訳ベースのフォールバックを試す
+    try:
+        katakana = await translate_to_katakana_proper_noun(t)
+        if katakana and not _has_ascii_letters(katakana):
+            return katakana
+    except Exception:
+        # 翻訳側での失敗はログのみに留め、最終的には元のトークンにフォールバックする
+        pass
+
+    # 3. どうしても適切なカタカナが得られない場合は、元のトークンを返す
+    return t
+
+
+async def name_to_katakana_roman_only(name: str) -> str:
+    """
+    氏名を「意味翻訳せずに」ローマ字ベースでカタカナ表記にする。
+    - 日本語（漢字・ひらがな・カタカナ）を含むトークンは、そのまま（ひらがなのみカタカナ化）
+    - ローマ字のみのトークンは romkan2 を優先し、必要に応じて Google 翻訳にフォールバック
+    - それ以外のトークンはそのまま
+    例:
+      \"Smirnov wachi\" -> 「スミルノフ ワチ」
+      \"山田 wachi\" -> 「山田 ワチ」
+    """
+    if not name or not name.strip():
+        return ""
+
+    text = name.strip()
+    tokens = re.split(r"\s+", text)
+    converted: list[str] = []
+
+    for token in tokens:
+        if not token:
+            continue
+        if _is_japanese_token(token):
+            # 日本語を含むトークンは、ひらがなのみカタカナに揃えて保持
+            converted.append(hiragana_to_katakana(token))
+        elif _is_latin_token(token):
+            # ローマ字のみのトークンは romkan2 → 必要に応じて翻訳フォールバック
+            converted_token = await roman_token_to_katakana_with_fallback(token)
+            converted.append(converted_token)
+        else:
+            # 記号やその他の文字が混ざる場合は安全のためそのまま
+            converted.append(token)
+
+    return " ".join(converted)
+
+
+async def name_to_katakana(name: str) -> str:
+    """氏名を固有名詞として自然なカタカナに変換するヘルパー（translate_to_katakana_proper_noun の薄いラッパー）"""
+    return await translate_to_katakana_proper_noun(name)
+
+
+async def company_name_to_katakana(name: str) -> str:
+    """
+    会社名を固有名詞として自然なカタカナに変換する。
+    例: 「yuto's food service&Co」→「ユトス フード サービス & コー」
+    - 「's」は所有格として扱い、「yuto's」→「yutos」として変換
+    - 「&」はそのまま残す
+    - 「-」などのハイフンは区切り記号として扱い、出力からは基本的に除外
+    - ローマ字トークンは romkan2 をベースにしつつ、必要に応じて翻訳フォールバックを利用
+    - よくある英単語（food, service, Coなど）はカスタム辞書で自然なカタカナに
+    """
+    if not name or not name.strip():
+        return ""
+
+    # 記号の正規化
+    text = name.strip().replace("’", "'")
+    # & や - の前後に空白を入れてトークンとして分離
+    text = re.sub(r"([&\\-–—])", r" \\1 ", text)
+    raw_tokens = re.split(r"\\s+", text.strip())
+
+    # よく使う単語のカスタムマッピング（すべてカタカナ）
+    custom_dict = {
+        "food": "フード",
+        "foods": "フーズ",
+        "service": "サービス",
+        "services": "サービス",
+        "co": "コー",
+        "co.": "コー",
+        "company": "カンパニー",
+        "inc": "インク",
+        "inc.": "インク",
+        "ltd": "リミテッド",
+        "ltd.": "リミテッド",
+        "llc": "エルエルシー",
+        "corp": "コープ",
+        "corp.": "コープ",
+        "corporation": "コーポレーション",
+        "holdings": "ホールディングス",
+        "group": "グループ",
+        "japan": "ジャパン",
+        "tokyo": "トウキョウ",
+    }
+
+    converted: list[str] = []
+
+    for token in raw_tokens:
+        if not token:
+            continue
+
+        t = token.strip()
+        if not t:
+            continue
+
+        # & はそのまま残す
+        if t in {"&", "＆"}:
+            converted.append("&")
+            continue
+
+        # ハイフン系は区切り記号として無視（出力には入れない）
+        if t in {"-", "–", "—"}:
+            continue
+
+        # 日本語を含むトークンは、ひらがなのみカタカナに揃えて保持
+        if _is_japanese_token(t):
+            converted.append(hiragana_to_katakana(t))
+            continue
+
+        # 所有格 's をまとめて処理（yuto's → yutos）
+        m = re.fullmatch(r"(.+)'s", t, flags=re.IGNORECASE)
+        if m:
+            base = m.group(1)
+            t_norm = base + "s"
+        else:
+            t_norm = t
+
+        # ピリオド付きの略称（Co. など）は末尾のピリオドを辞書検索のために一旦除去
+        t_lower = t_norm.lower()
+        if t_lower.endswith("."):
+            t_lower = t_lower[:-1]
+
+        # カスタム辞書にある単語は優先してそのカタカナを使う
+        if t_lower in custom_dict:
+            converted.append(custom_dict[t_lower])
+            continue
+
+        # ローマ字のみのトークンは、氏名と同様のロジックで変換
+        if _is_latin_token(t_norm):
+            converted_token = await roman_token_to_katakana_with_fallback(t_norm)
+            converted.append(converted_token)
+            continue
+
+        # 上記いずれにも当てはまらない場合は、そのまま出力
+        converted.append(t)
+
+    # 空でないトークンをスペース区切りで結合
+    return " ".join(token for token in converted if token)
 
 def replace_in_docx_keeping_style(doc, replacements: dict):
     """docx内の全段落・表セルのテキストを置換する。run単位で置換し、残りは段落単位で置換（複数runに分かれているプレースホルダも確実に置換）"""
@@ -294,6 +572,15 @@ def sanitize_filename(filename: str, max_length: int = 100) -> str:
     if len(filename) > max_length:
         filename = filename[:max_length]
     return filename
+
+
+def escape_drive_query_name(name: str) -> str:
+    """Drive検索クエリ用にフォルダ名のシングルクォートをエスケープ"""
+    if not name:
+        return ""
+    # Driveの検索クエリでは、文字列リテラル内のシングルクォートは「\\'」でエスケープする必要がある
+    return name.replace("'", "\\'")
+
 
 # 出力ファイル名を生成
 def generate_output_filename(company_name: str, file_type: str) -> str:
@@ -354,29 +641,27 @@ def upload_file_to_slack(filepath: str, title: str):
         print(f"❌ Slackファイルアップロード失敗: {res_json}")
 
 def get_google_drive_service():
-    """Google Drive APIサービスを取得"""
+    """Google Drive API を OAuth ユーザー（refresh_token）で取得。ファイルはユーザー所有でアップロードされる。"""
     try:
-        # 認証情報ファイルの存在確認
-        credentials_path = os.path.abspath(GOOGLE_DRIVE_CREDENTIALS_PATH)
-        if not os.path.exists(credentials_path):
-            raise FileNotFoundError(
-                f"認証情報ファイルが見つかりません: {credentials_path}\n"
-                f"現在の作業ディレクトリ: {os.getcwd()}\n"
-                f"設定されたパス: {GOOGLE_DRIVE_CREDENTIALS_PATH}"
+        if not (GOOGLE_DRIVE_OAUTH_CLIENT_ID and GOOGLE_DRIVE_OAUTH_CLIENT_SECRET and GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN):
+            raise RuntimeError(
+                "Google Drive OAuth の環境変数が設定されていません。"
+                "GOOGLE_DRIVE_OAUTH_CLIENT_ID / GOOGLE_DRIVE_OAUTH_CLIENT_SECRET / "
+                "GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN を設定してください。"
             )
-        
-        print(f"✅ 認証情報ファイルを読み込み: {credentials_path}")
-        
-        creds = service_account.Credentials.from_service_account_file(
-            credentials_path,
-            scopes=['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets']
+
+        creds = UserCredentials(
+            token=None,
+            refresh_token=GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN,
+            token_uri=GOOGLE_DRIVE_OAUTH_TOKEN_URI,
+            client_id=GOOGLE_DRIVE_OAUTH_CLIENT_ID,
+            client_secret=GOOGLE_DRIVE_OAUTH_CLIENT_SECRET,
+            scopes=GOOGLE_DRIVE_OAUTH_SCOPES,
         )
-        
-        # HTTPクライアントにタイムアウト設定を追加
-        http = httplib2.Http(timeout=300)  # 5分
+
+        http = httplib2.Http(timeout=300)
         authorized_http = AuthorizedHttp(creds, http=http)
-        
-        return build('drive', 'v3', http=authorized_http)
+        return build("drive", "v3", http=authorized_http)
     except Exception as e:
         print(f"❌ Google Drive認証エラー: {e}")
         import traceback
@@ -422,9 +707,11 @@ async def create_company_folder(company_name: str) -> str:
             
             # フォルダ名を安全な形式に変換
             safe_folder_name = sanitize_filename(company_name)
+            # Drive クエリ用にシングルクォートをエスケープした名前を使用
+            escaped_name = escape_drive_query_name(safe_folder_name)
             
             # 既存のフォルダを検索（重複チェック）
-            query = f"name='{safe_folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            query = f"name='{escaped_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
             if GOOGLE_DRIVE_FOLDER_ID:
                 query += f" and '{GOOGLE_DRIVE_FOLDER_ID}' in parents"
             
@@ -497,23 +784,15 @@ async def create_company_folder(company_name: str) -> str:
 
 async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = None) -> str:
     """ファイルをGoogleドライブにアップロード（リトライ付き）"""
-    # デバッグ情報を出力
-    print(f"🔍 デバッグ情報:")
-    print(f"  - ファイルパス: {file_path}")
-    print(f"  - フォルダID: {folder_id}")
-    print(f"  - ファイル名: {file_name if file_name else '(未指定)'}")
-    print(f"  - GOOGLE_DRIVE_FOLDER_ID設定値: {GOOGLE_DRIVE_FOLDER_ID if GOOGLE_DRIVE_FOLDER_ID else '(未設定)'}")
-    
     if not folder_id:
         raise ValueError("フォルダIDが指定されていません。GOOGLE_DRIVE_FOLDER_IDを確認してください。")
-    
+
     max_retries = 3
     delay = 2
     
     for attempt in range(max_retries):
         try:
             drive_service = get_google_drive_service()
-            
             if file_name is None:
                 file_name = os.path.basename(file_path)
             
@@ -523,12 +802,13 @@ async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = 
                 'parents': [folder_id]
             }
             
-            # ファイルをアップロード
+            # ファイルをアップロード（共有ドライブ対応）
             media = MediaFileUpload(file_path, resumable=True)
             file = drive_service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id'
+                fields='id',
+                supportsAllDrives=True
             ).execute()
             
             file_id = file.get('id')
@@ -545,18 +825,18 @@ async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = 
                 )
                 print(error_msg)
                 raise Exception(error_msg) from e
-            # ストレージクォータ超過エラー（アップロード先がサービスアカウント所有だと発生）
+            # ストレージクォータ超過（OAuth 利用時は通常発生しない）
             if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
                 error_msg = (
-                    f"❌ サービスアカウントにはストレージクォータがありません。\n"
-                    f"GOOGLE_DRIVE_FOLDER_ID には、**ご自身のGoogleドライブで作成したフォルダ**のIDを指定してください。\n"
-                    f"（このアプリで作成したフォルダや、サービスアカウントが作成したフォルダは使用できません。）\n"
-                    f"手順: ご自身のドライブで新規フォルダを作成 → そのフォルダをサービスアカウントのメールに「編集者」で共有 → フォルダURLのIDを .env の GOOGLE_DRIVE_FOLDER_ID に設定。\n"
+                    f"❌ Google ドライブのストレージ容量が不足しています。\n"
+                    f"ドライブの空き容量を確認してください。\n"
                     f"エラー詳細: {e}"
                 )
                 print(error_msg)
-                # このエラーはリトライしても解決しないため、即座に例外を投げる
                 raise Exception(error_msg) from e
+            # その他の 403（権限不足・アクセス拒否など）
+            if e.resp.status == 403:
+                print("❌ 403 権限エラー: フォルダIDや共有設定を確認してください。")
             # その他のHttpError（権限エラーなど）
             if attempt < max_retries - 1:
                 print(f"⚠️ Googleドライブアップロード接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
@@ -577,8 +857,8 @@ async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = 
                 print(f"❌ Googleドライブアップロード接続失敗（{max_retries}回試行後）: {e}")
                 raise
 
-def append_to_spreadsheet(data: FormData, file_paths: dict = None):
-    """Spreadsheetに回答情報を追加"""
+def append_to_spreadsheet(data: FormData, file_paths: dict = None, folder_url: str = ""):
+    """Spreadsheetに回答情報を追加（FolderURL 列がある場合はフォルダURLも記録）"""
     try:
         if not GOOGLE_SHEETS_SPREADSHEET_ID:
             print("⚠️ Spreadsheet IDが設定されていません。スキップします。")
@@ -591,7 +871,7 @@ def append_to_spreadsheet(data: FormData, file_paths: dict = None):
         
         # 行データを準備（スプレッドシートの列順に合わせる）
         # CreatedDate, CompanyName, RepresentativeName, RepresentativeBirthDay, 
-        # RepresentativeAddress, BusinessPurpose1-5, Email Address
+        # RepresentativeAddress, BusinessPurpose1-5, Email Address, FolderURL
         row_data = [
             current_datetime,  # CreatedDate
             data.companyName,  # CompanyName
@@ -604,6 +884,7 @@ def append_to_spreadsheet(data: FormData, file_paths: dict = None):
             data.purpose4,  # BusinessPurpose4
             data.purpose5,  # BusinessPurpose5
             data.email,  # Email Address
+            folder_url or "",  # FolderURL（空文字も許容）
         ]
         
         # Spreadsheetに追加（ヘッダー行の下に追加）
@@ -631,7 +912,7 @@ REGISTRATION_TEMPLATE_NEW = os.path.join(_TEMPORARY_DIR, "★❷(A商号)_登記
 
 # 登記申請
 @app.post("/generate-registration-application")
-async def generate_registration_application(data: FormData):
+async def generate_registration_application(data: FormData, folder_id: str | None = None):
     if os.path.exists(REGISTRATION_TEMPLATE_NEW):
         template_path = REGISTRATION_TEMPLATE_NEW
     else:
@@ -649,10 +930,10 @@ async def generate_registration_application(data: FormData):
     output_path = generate_output_filename(data.companyName, "registration-application.docx")
 
     # 登記申請で置換する対象: (A商号), (A商号のフリガナ), (C社員住所), (D社員氏名・カタカナ), (D社員氏名・英語)
-    # フリガナ・住所・氏名カタカナは、API失敗時も romkan2 で無理やりカタカナに変換
-    translated_company_name = await name_to_katakana(data.companyName)
-    katakana_president_name = await name_to_katakana(data.presidentName)
-    address_katakana = get_japanese_address_katakana_safe(data.presidentAddress)
+    # (A商号のフリガナ) と (D社員氏名・カタカナ) は固有名詞として自然なカタカナ表記に変換。住所もできるだけ自然なカタカナにする。
+    translated_company_name = await company_name_to_katakana(data.companyName)
+    katakana_president_name = await name_to_katakana_roman_only(data.presidentName)
+    address_katakana = await get_address_katakana_for_documents(data.presidentAddress)
 
     replacements = {
         "(A商号)": data.companyName,
@@ -669,17 +950,12 @@ async def generate_registration_application(data: FormData):
 
     # Googleドライブにアップロード
     try:
-        if not GOOGLE_DRIVE_FOLDER_ID:
-            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。")
-            print("   .envファイルに以下を追加してください：")
-            print("   GOOGLE_DRIVE_FOLDER_ID=your-folder-id")
-            print("   ※フォルダIDは、Googleドライブでフォルダを開いた際のURLから取得できます")
-            print("   ※例: https://drive.google.com/drive/folders/1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            print("⚠️ ファイルアップロードをスキップします")
+        target_folder_id = folder_id or GOOGLE_DRIVE_FOLDER_ID
+        if not target_folder_id:
+            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。ファイルはローカルにのみ保存されます。")
         else:
-            print(f"✅ GOOGLE_DRIVE_FOLDER_ID: {GOOGLE_DRIVE_FOLDER_ID}")
             file_name = os.path.basename(output_path)
-            file_id = await upload_file_to_drive(output_path, GOOGLE_DRIVE_FOLDER_ID, file_name)
+            file_id = await upload_file_to_drive(output_path, target_folder_id, file_name)
             print(f"✅ Googleドライブにアップロード完了: {file_id}")
     except Exception as e:
         print(f"⚠️ Googleドライブアップロードエラー（処理は続行）: {e}")
@@ -721,7 +997,7 @@ ARTICLE_TEMPLATE_NEW = os.path.join(_TEMPORARY_DIR, "★❶(A商号)_定款_2025
 
 # 定款作成
 @app.post("/generate-article-of-incorporation")
-async def generate_article_of_incorporation(data: FormData):
+async def generate_article_of_incorporation(data: FormData, folder_id: str | None = None):
     if os.path.exists(ARTICLE_TEMPLATE_NEW):
         template_path = ARTICLE_TEMPLATE_NEW
     else:
@@ -738,9 +1014,10 @@ async def generate_article_of_incorporation(data: FormData):
 
     output_path = generate_output_filename(data.companyName, "article-of-incorporation.docx")
 
-    # 定款で置換する対象: (A商号), (B目的1)~(B目的5), (C社員住所), (D社員氏名・カタカナ)。(D社員氏名・カタカナ)は翻訳失敗時も romkan2 で変換
-    katakana_president_name = await name_to_katakana(data.presidentName)
-    address_katakana = get_japanese_address_katakana_safe(data.presidentAddress)
+    # 定款で置換する対象: (A商号), (B目的1)~(B目的5), (C社員住所), (D社員氏名・カタカナ)。
+    # (D社員氏名・カタカナ) と住所は固有名詞として自然なカタカナ表記に変換する。
+    katakana_president_name = await name_to_katakana_roman_only(data.presidentName)
+    address_katakana = await get_address_katakana_for_documents(data.presidentAddress)
     translated_purpose = await translate_text(data.purpose1)
     translated_purpose2 = await translate_text(data.purpose2)
     translated_purpose3 = await translate_text(data.purpose3)
@@ -764,17 +1041,12 @@ async def generate_article_of_incorporation(data: FormData):
     
     # Googleドライブにアップロード
     try:
-        if not GOOGLE_DRIVE_FOLDER_ID:
-            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。")
-            print("   .envファイルに以下を追加してください：")
-            print("   GOOGLE_DRIVE_FOLDER_ID=your-folder-id")
-            print("   ※フォルダIDは、Googleドライブでフォルダを開いた際のURLから取得できます")
-            print("   ※例: https://drive.google.com/drive/folders/1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            print("⚠️ ファイルアップロードをスキップします")
+        target_folder_id = folder_id or GOOGLE_DRIVE_FOLDER_ID
+        if not target_folder_id:
+            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。ファイルはローカルにのみ保存されます。")
         else:
-            print(f"✅ GOOGLE_DRIVE_FOLDER_ID: {GOOGLE_DRIVE_FOLDER_ID}")
             file_name = os.path.basename(output_path)
-            file_id = await upload_file_to_drive(output_path, GOOGLE_DRIVE_FOLDER_ID, file_name)
+            file_id = await upload_file_to_drive(output_path, target_folder_id, file_name)
             print(f"✅ Googleドライブにアップロード完了: {file_id}")
     except Exception as e:
         print(f"⚠️ Googleドライブアップロードエラー（処理は続行）: {e}")
@@ -811,7 +1083,7 @@ def download_article_of_incorporation(filename: str):
 SEAL_TEMPLATE_NEW = os.path.join(_TEMPORARY_DIR, "★❸(A商号)_印鑑届書_20250827_テンプレート_v1.0.xlsx")
 
 @app.post("/generate-seal-registration")
-async def generate_seal_registration(data: FormData):
+async def generate_seal_registration(data: FormData, folder_id: str | None = None):
     if os.path.exists(SEAL_TEMPLATE_NEW):
         template_path = SEAL_TEMPLATE_NEW
     else:
@@ -825,14 +1097,15 @@ async def generate_seal_registration(data: FormData):
     wb = load_workbook(template_path)
     ws = wb.active
 
-    # 氏名・(A商号のフリガナ)・(C社員住所)は、API失敗時も romkan2 で無理やりカタカナに変換
-    katakana_president_name = await name_to_katakana(data.presidentName)
-    address_katakana = get_japanese_address_katakana_safe(data.presidentAddress)
+    # 氏名・(A商号のフリガナ)・住所は固有名詞として自然なカタカナ表記に変換する。
+    katakana_president_name = await name_to_katakana_roman_only(data.presidentName)
+    address_katakana = await get_address_katakana_for_documents(data.presidentAddress)
     birth_str = str(data.birthyear) + "年" + str(data.birthmonth) + "月" + str(data.birthday) + "日"
 
     if template_path == SEAL_TEMPLATE_NEW:
         # 印鑑届書で置換する対象: (A商号), (A商号のフリガナ), (C社員住所), (D社員氏名・カタカナ), (D社員氏名・英語), (E社員生年月日)
-        translated_company_name = await name_to_katakana(data.companyName)
+        # (A商号のフリガナ) と (D社員氏名・カタカナ) は固有名詞として自然なカタカナ表記に変換する。
+        translated_company_name = await company_name_to_katakana(data.companyName)
         replacements = {
             "(A商号)": data.companyName,
             "(A商号のフリガナ)": translated_company_name,
@@ -874,17 +1147,12 @@ async def generate_seal_registration(data: FormData):
 
     # Googleドライブにアップロード
     try:
-        if not GOOGLE_DRIVE_FOLDER_ID:
-            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。")
-            print("   .envファイルに以下を追加してください：")
-            print("   GOOGLE_DRIVE_FOLDER_ID=your-folder-id")
-            print("   ※フォルダIDは、Googleドライブでフォルダを開いた際のURLから取得できます")
-            print("   ※例: https://drive.google.com/drive/folders/1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            print("⚠️ ファイルアップロードをスキップします")
+        target_folder_id = folder_id or GOOGLE_DRIVE_FOLDER_ID
+        if not target_folder_id:
+            print("⚠️ GOOGLE_DRIVE_FOLDER_IDが設定されていません。ファイルはローカルにのみ保存されます。")
         else:
-            print(f"✅ GOOGLE_DRIVE_FOLDER_ID: {GOOGLE_DRIVE_FOLDER_ID}")
             file_name = os.path.basename(output_path)
-            file_id = await upload_file_to_drive(output_path, GOOGLE_DRIVE_FOLDER_ID, file_name)
+            file_id = await upload_file_to_drive(output_path, target_folder_id, file_name)
             print(f"✅ Googleドライブにアップロード完了: {file_id}")
     except Exception as e:
         print(f"⚠️ Googleドライブアップロードエラー（処理は続行）: {e}")
@@ -933,20 +1201,32 @@ def record_to_spreadsheet(data: FormData):
 async def _background_submit_task(data: FormData) -> None:
     """申請受付後のバックグラウンド処理: 3ファイル生成・Driveアップロード・Spreadsheet記録"""
     try:
+        folder_id = None
+        folder_url = ""
         try:
-            await generate_registration_application(data)
+            if GOOGLE_DRIVE_FOLDER_ID:
+                folder_id = await create_company_folder(data.companyName)
+                folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
+                print(f"✅ 会社フォルダを使用: {folder_url}")
+            else:
+                print("⚠️ GOOGLE_DRIVE_FOLDER_ID が未設定のため、会社フォルダは作成しません。")
+        except Exception as e:
+            print(f"⚠️ 会社フォルダ作成エラー（処理は続行）: {e}")
+
+        try:
+            await generate_registration_application(data, folder_id=folder_id)
         except Exception as e:
             print(f"⚠️ 登記申請書生成エラー: {e}")
         try:
-            await generate_article_of_incorporation(data)
+            await generate_article_of_incorporation(data, folder_id=folder_id)
         except Exception as e:
             print(f"⚠️ 定款生成エラー: {e}")
         try:
-            await generate_seal_registration(data)
+            await generate_seal_registration(data, folder_id=folder_id)
         except Exception as e:
             print(f"⚠️ 印鑑届出書生成エラー: {e}")
         try:
-            append_to_spreadsheet(data)
+            append_to_spreadsheet(data, folder_url=folder_url)
         except Exception as e:
             print(f"⚠️ Spreadsheet記録エラー: {e}")
     except Exception as e:

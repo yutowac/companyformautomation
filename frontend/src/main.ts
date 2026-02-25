@@ -39,6 +39,12 @@ function showPage(pageId: PageId): void {
   // 再描画を挟んでからactiveを付与してフェードインさせる
   void newPage.offsetWidth;
   newPage.classList.add('page-active');
+
+  // ホームに戻ったタイミングでフォームをクリア
+  if (pageId === 'landing') {
+    resetFormFields();
+    generatedFilenames = {};
+  }
 }
 
 function routeFromHash(hash: string): PageId {
@@ -119,6 +125,30 @@ function getFormData(): FormData {
     purpose5: getInputValue('purpose5'),
     email: getInputValue('email'),
   };
+}
+
+function resetFormFields(): void {
+  const ids = [
+    'companyName',
+    'presidentName',
+    'presidentAddress',
+    'birthyear',
+    'birthmonth',
+    'birthday',
+    'purpose1',
+    'purpose2',
+    'purpose3',
+    'purpose4',
+    'purpose5',
+    'email',
+  ];
+
+  ids.forEach((id) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (el) {
+      el.value = '';
+    }
+  });
 }
 
 function validateEmail(email: string): boolean {

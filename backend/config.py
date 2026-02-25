@@ -26,6 +26,25 @@ GOOGLE_DRIVE_CREDENTIALS_PATH = os.getenv(
 GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")  # 親フォルダID（オプション）
 GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID")  # Spreadsheet ID
 
+# ==========
+# Google Drive (OAuth ユーザー認証用)
+# ==========
+GOOGLE_DRIVE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_ID")
+GOOGLE_DRIVE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_SECRET")
+GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN = os.getenv("GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN")
+
+# 通常は固定で OK
+GOOGLE_DRIVE_OAUTH_TOKEN_URI = os.getenv(
+    "GOOGLE_DRIVE_OAUTH_TOKEN_URI",
+    "https://oauth2.googleapis.com/token",
+)
+
+# Drive で使うスコープ
+GOOGLE_DRIVE_OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/drive.file",
+]
+
+
 # その他（例：Notionなど）※使っていないなら削除可
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")

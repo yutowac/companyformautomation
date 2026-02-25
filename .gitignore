@@ -42,6 +42,8 @@ ENV/
 !.env.example
 
 # Google サービスアカウント JSON
+*secret*.json
+*oauth*.json
 *credentials*.json
 *credential*.json
 companyestablishsupport-a633c02517ff.json
