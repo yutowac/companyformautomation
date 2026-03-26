@@ -7,7 +7,7 @@ import {
 } from './api';
 import { getLanguage, setLanguage, t, getTranslations } from './i18n';
 
-type PageId = 'landing' | 'form' | 'thanks';
+type PageId = 'landing' | 'form' | 'confirm' | 'thanks';
 
 function showPage(pageId: PageId): void {
   const newPage = document.getElementById(`page-${pageId}`) as HTMLElement | null;
@@ -51,6 +51,8 @@ function routeFromHash(hash: string): PageId {
   switch (hash) {
     case '#/form':
       return 'form';
+    case '#/confirm':
+      return 'confirm';
     case '#/thanks':
       return 'thanks';
     case '#/':
@@ -114,7 +116,9 @@ function getFormData(): FormData {
   return {
     companyName: getInputValue('companyName'),
     presidentName: getInputValue('presidentName'),
+    presidentNameLocal: getInputValue('presidentNameLocal'),
     presidentAddress: getInputValue('presidentAddress'),
+    presidentAddressLocal: getInputValue('presidentAddressLocal'),
     birthyear: parseInt(getInputValue('birthyear'), 10),
     birthmonth: parseInt(getInputValue('birthmonth'), 10),
     birthday: parseInt(getInputValue('birthday'), 10),
@@ -131,7 +135,9 @@ function resetFormFields(): void {
   const ids = [
     'companyName',
     'presidentName',
+    'presidentNameLocal',
     'presidentAddress',
+    'presidentAddressLocal',
     'birthyear',
     'birthmonth',
     'birthday',
@@ -149,6 +155,16 @@ function resetFormFields(): void {
       el.value = '';
     }
   });
+
+  // purpose2〜purpose5 は初期状態だと非表示
+  const purposeGroups = ['purpose2Group', 'purpose3Group', 'purpose4Group', 'purpose5Group'];
+  purposeGroups.forEach((id) => {
+    const group = document.getElementById(id) as HTMLElement | null;
+    if (group) group.style.display = 'none';
+  });
+
+  const addBtn = document.getElementById('addPurposeButton') as HTMLElement | null;
+  if (addBtn) addBtn.style.display = '';
 }
 
 function validateEmail(email: string): boolean {
@@ -182,16 +198,79 @@ let generatedFilenames: {
   sealRegistration?: string;
 } = {};
 
-async function submitForm(): Promise<void> {
-  const formData = getFormData();
+let pendingFormData: FormData | null = null;
 
-  if (!validateFormData(formData)) {
+function formatBirthDay(data: FormData): string {
+  const y = data.birthyear;
+  const m = data.birthmonth;
+  const d = data.birthday;
+  if ([y, m, d].some((n) => Number.isNaN(n))) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function renderConfirmPage(data: FormData): void {
+  const setText = (id: string, value: string) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  setText('confirm_companyName', data.companyName || '-');
+  setText('confirm_presidentName', data.presidentName || '-');
+  setText('confirm_presidentNameLocal', data.presidentNameLocal || '-');
+  setText('confirm_birthDay', formatBirthDay(data) || '-');
+  setText('confirm_presidentAddress', data.presidentAddress || '-');
+  setText('confirm_presidentAddressLocal', data.presidentAddressLocal || '-');
+
+  const purposes = [data.purpose1, data.purpose2, data.purpose3, data.purpose4, data.purpose5]
+    .map((p) => p?.trim())
+    .filter((p) => p);
+  setText('confirm_purposes', purposes.length ? purposes.join(', ') : '-');
+
+  setText('confirm_email', data.email || '-');
+}
+
+function addPurpose(): void {
+  const order = ['purpose2Group', 'purpose3Group', 'purpose4Group', 'purpose5Group'];
+  const nextId = order.find((id) => {
+    const group = document.getElementById(id) as HTMLElement | null;
+    return group && group.style.display === 'none';
+  });
+
+  if (!nextId) return;
+
+  const nextGroup = document.getElementById(nextId) as HTMLElement | null;
+  if (nextGroup) nextGroup.style.display = 'block';
+
+  // purpose5 まで出たら add ボタンを隠す
+  const allVisible = order.every((id) => {
+    const group = document.getElementById(id) as HTMLElement | null;
+    return group && group.style.display !== 'none';
+  });
+  const addBtn = document.getElementById('addPurposeButton') as HTMLElement | null;
+  if (addBtn) addBtn.style.display = allVisible ? 'none' : '';
+}
+
+async function goToConfirm(): Promise<void> {
+  const formData = getFormData();
+  if (!validateFormData(formData)) return;
+
+  pendingFormData = formData;
+  renderConfirmPage(formData);
+  window.location.hash = '#/confirm';
+}
+
+function backToFormFromConfirm(): void {
+  window.location.hash = '#/form';
+}
+
+async function confirmAndSubmit(): Promise<void> {
+  if (!pendingFormData) {
+    window.location.hash = '#/form';
     return;
   }
 
   try {
-    await submitApplication(formData);
-    // URLハッシュでサンクスページへ遷移
+    await submitApplication(pendingFormData);
     window.location.hash = '#/thanks';
   } catch (error) {
     const message = error instanceof Error ? error.message : t('errorSubmissionFailed');
@@ -291,7 +370,10 @@ function downloadSealRegistrationFile(): void {
 // グローバルスコープに公開（HTMLのonclickから呼び出すため）
 (window as any).showPage = showPage;
 (window as any).toggleLanguage = toggleLanguage;
-(window as any).submitForm = submitForm;
+(window as any).goToConfirm = goToConfirm;
+(window as any).confirmAndSubmit = confirmAndSubmit;
+(window as any).backToFormFromConfirm = backToFormFromConfirm;
+(window as any).addPurpose = addPurpose;
 (window as any).downloadWordFile = downloadRegistrationApplicationFile;
 (window as any).downloadWordFile2 = downloadArticleOfIncorporationFile;
 (window as any).downloadExcelFile = downloadSealRegistrationFile;

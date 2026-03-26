@@ -51,3 +51,7 @@ NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
 # テンプレート・生成ファイルの保存先（未設定時はカレントディレクトリ。Render では設定不要）
 TEMPLATE_DIR = os.getenv("TEMPLATE_DIR", os.path.dirname(os.path.abspath(__file__)) or ".")
+
+# OpenAI（カタカナ変換用・任意）
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_KATAKANA_MODEL = os.getenv("OPENAI_KATAKANA_MODEL", "gpt-4o-mini")

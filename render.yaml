@@ -32,3 +32,5 @@ services:
       # GOOGLE_DRIVE_CREDENTIALS_PATH (または JSON を環境変数で渡す)
       # GOOGLE_DRIVE_FOLDER_ID
       # GOOGLE_SHEETS_SPREADSHEET_ID
+      # OPENAI_API_KEY（任意: 有効なら OpenAI でカタカナ化を試し、失敗時はフォールバック）
+      # OPENAI_KATAKANA_MODEL（任意: デフォルトは gpt-4o-mini）

@@ -39,48 +39,119 @@
                 <form id="companyForm">
                     <label for="companyName" data-i18n="companyName" class="label-with-tooltip">
                         <span class="label-text">Company Name</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
                         <span class="tooltip-icon" data-tooltip-key="companyNameTooltip">?</span>
                         <span class="tooltip-text" data-i18n-tooltip="companyNameTooltip"></span>
                     </label>
-                    <input type="text" id="companyName" data-i18n-placeholder="placeholderCompanyName" placeholder="">
+                    <div style="display:flex; gap:10px; align-items:center; width:100%;">
+                        <input
+                            type="text"
+                            id="companyName"
+                            data-i18n-placeholder="placeholderCompanyName"
+                            placeholder=""
+                            style="flex:1; width:auto;"
+                        >
+                        <span style="white-space:nowrap; font-weight:600;">LLC</span>
+                    </div>
 
-                    <label for="presidentName" data-i18n="presidentName" class="label-with-tooltip">
-                        <span class="label-text">Representative Name</span>
-                        <span class="tooltip-icon" data-tooltip-key="presidentNameTooltip">?</span>
-                        <span class="tooltip-text" data-i18n-tooltip="presidentNameTooltip"></span>
+                    <div class="field-section">
+                        <div class="field-section-title">Representative Name</div>
+
+                        <label for="presidentName" class="subfield-label">
+                            <span style="display:inline-flex; align-items:center; gap:6px;">
+                                <span>English</span>
+                                <span style="color:#e74c3c; font-weight:700;">*</span>
+                            </span>
+                        </label>
+                        <input type="text" id="presidentName" data-i18n-placeholder="placeholderPresidentName" placeholder="John Smith">
+
+                        <label for="presidentNameLocal" class="subfield-label">
+                            <span>Local Language</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="presidentNameLocal"
+                            data-i18n-placeholder="placeholderPresidentNameLocal"
+                            placeholder="e.g., 張三 / محمد علي"
+                        >
+                    </div>
+
+                    <label for="presidentBday">
+                        <span class="label-text" data-i18n="presidentBirthDay">Representative Birth Day</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
                     </label>
-                    <input type="text" id="presidentName" data-i18n-placeholder="placeholderPresidentName" placeholder="John Smith">
-
-                    <label for="presidentBday" data-i18n="presidentBirthDay">Representative Birth Day</label>
                     <div class="input-group">
                         <input type="text" id="birthyear" data-i18n-placeholder="placeholderYear" placeholder="yyyy">
                         <input type="text" id="birthmonth" data-i18n-placeholder="placeholderMonth" placeholder="mm">
                         <input type="text" id="birthday" data-i18n-placeholder="placeholderDay" placeholder="dd">
                     </div>
 
-                    <label for="presidentAddress" data-i18n="presidentAddress" class="label-with-tooltip">
-                        <span class="label-text">Representative Address</span>
-                        <span class="tooltip-icon" data-tooltip-key="presidentAddressTooltip">?</span>
-                        <span class="tooltip-text" data-i18n-tooltip="presidentAddressTooltip"></span>
-                    </label>
-                    <input type="text" id="presidentAddress" data-i18n-placeholder="placeholderPresidentAddress" placeholder="9-8-7 bef Apartment, Chiyoda, Tokyo">
+                    <div class="field-section">
+                        <div class="field-section-title">Representative Address</div>
 
-                    <label for="purpose1" data-i18n="businessPurpose1">Business Purpose 1</label>
+                        <label for="presidentAddress" class="subfield-label">
+                            <span style="display:inline-flex; align-items:center; gap:6px;">
+                                <span>English</span>
+                                <span style="color:#e74c3c; font-weight:700;">*</span>
+                            </span>
+                        </label>
+                        <input type="text" id="presidentAddress" data-i18n-placeholder="placeholderPresidentAddress" placeholder="9-8-7 bef Apartment, Chiyoda, Tokyo">
+
+                        <label for="presidentAddressLocal" class="subfield-label">
+                            <span>Local Language</span>
+                            <span class="optional-note">(Optional)</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="presidentAddressLocal"
+                            data-i18n-placeholder="placeholderPresidentAddressLocal"
+                            placeholder="e.g., 〒123-4567 東京 ..."
+                        >
+                    </div>
+
+                    <label for="purpose1">
+                        <span class="label-text" data-i18n="businessPurpose1">Business Purpose 1</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
                     <input type="text" id="purpose1" data-i18n-placeholder="placeholderPurpose1" placeholder="e.g., IT consulting business">
 
-                    <label for="purpose2" data-i18n="businessPurpose2">Business Purpose 2</label>
-                    <input type="text" id="purpose2" data-i18n-placeholder="placeholderPurpose2" placeholder="e.g., Software development business" value="">
+                    <div id="purpose2Group" style="display:none;">
+                        <label for="purpose2" data-i18n="businessPurpose2">Business Purpose 2</label>
+                        <input type="text" id="purpose2" data-i18n-placeholder="placeholderPurpose2" placeholder="e.g., Software development business" value="">
+                    </div>
 
-                    <label for="purpose3" data-i18n="businessPurpose3">Business Purpose 3</label>
-                    <input type="text" id="purpose3" data-i18n-placeholder="placeholderPurpose3" placeholder="e.g., System integration business" value="">
+                    <div id="purpose3Group" style="display:none;">
+                        <label for="purpose3" data-i18n="businessPurpose3">Business Purpose 3</label>
+                        <input type="text" id="purpose3" data-i18n-placeholder="placeholderPurpose3" placeholder="e.g., System integration business" value="">
+                    </div>
 
-                    <label for="purpose4" data-i18n="businessPurpose4">Business Purpose 4</label>
-                    <input type="text" id="purpose4" data-i18n-placeholder="placeholderPurpose4" placeholder="e.g., Data analysis business" value="">
+                    <div id="purpose4Group" style="display:none;">
+                        <label for="purpose4" data-i18n="businessPurpose4">Business Purpose 4</label>
+                        <input type="text" id="purpose4" data-i18n-placeholder="placeholderPurpose4" placeholder="e.g., Data analysis business" value="">
+                    </div>
 
-                    <label for="purpose5" data-i18n="businessPurpose5">Business Purpose 5</label>
-                    <input type="text" id="purpose5" data-i18n-placeholder="placeholderPurpose5" placeholder="e.g., Cloud services business" value="">
+                    <div id="purpose5Group" style="display:none;">
+                        <label for="purpose5" data-i18n="businessPurpose5">Business Purpose 5</label>
+                        <input type="text" id="purpose5" data-i18n-placeholder="placeholderPurpose5" placeholder="e.g., Cloud services business" value="">
+                    </div>
 
-                    <label for="email" data-i18n="email">Email Address</label>
+                    <div style="margin-top: 4px;">
+                        <button
+                            type="button"
+                            class="btn-add"
+                            onclick="addPurpose()"
+                            id="addPurposeButton"
+                            aria-label="Add purpose"
+                        >
+                            <span aria-hidden="true" class="btn-add-plus">+</span>
+                            <span class="btn-add-text">add</span>
+                        </button>
+                    </div>
+
+                    <label for="email">
+                        <span class="label-text" data-i18n="email">Email Address</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
                     <input type="email" id="email" data-i18n-placeholder="placeholderEmail" placeholder="example@email.com">
 
                     <div id="loader" style="display: none;" class="loader-container">
@@ -89,7 +160,7 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="button" class="btn-primary" onclick="submitForm()" data-i18n="submit">Submit</button>
+                        <button type="button" class="btn-primary" onclick="goToConfirm()" data-i18n="submit">Submit</button>
                     </div>
                 </form>
 
@@ -115,6 +186,68 @@
                         data-i18n="backToHome"
                     >
                         ホームへ戻る
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ページ4: 入力内容確認 -->
+        <div id="page-confirm" class="page">
+            <div class="page-inner">
+                <h1>Confirm your information</h1>
+                <div class="confirm-card">
+                    <div class="confirm-row">
+                        <p class="confirm-label">Company Name</p>
+                        <p class="confirm-value" id="confirm_companyName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Name (English)</p>
+                        <p class="confirm-value" id="confirm_presidentName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Name (Local Language)</p>
+                        <p class="confirm-value" id="confirm_presidentNameLocal"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Birth Day</p>
+                        <p class="confirm-value" id="confirm_birthDay"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Address (English)</p>
+                        <p class="confirm-value" id="confirm_presidentAddress"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Address (Local Language)</p>
+                        <p class="confirm-value" id="confirm_presidentAddressLocal"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Business Purposes</p>
+                        <p class="confirm-value" id="confirm_purposes"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Email Address</p>
+                        <p class="confirm-value" id="confirm_email"></p>
+                    </div>
+                </div>
+
+                <p class="confirm-question">
+                    Is this information correct?
+                </p>
+
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="btn-secondary"
+                        onclick="backToFormFromConfirm()"
+                    >
+                        Back
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick="confirmAndSubmit()"
+                    >
+                        Yes, I confirm
                     </button>
                 </div>
             </div>

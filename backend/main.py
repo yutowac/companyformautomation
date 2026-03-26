@@ -64,15 +64,17 @@ app.add_middleware(
 class FormData(BaseModel):
     companyName: str
     presidentName: str
+    presidentNameLocal: str = ''
     presidentAddress: str
+    presidentAddressLocal: str = ''
     birthyear: int
     birthmonth: int
     birthday: int
     purpose1: str
-    purpose2: str
-    purpose3: str
-    purpose4: str
-    purpose5: str
+    purpose2: str = ''
+    purpose3: str = ''
+    purpose4: str = ''
+    purpose5: str = ''
     email: str
 
 # Google Maps API を使用して住所を日本語に変換
@@ -131,6 +133,118 @@ def get_japanese_address_katakana_safe(address: str) -> str:
     return address
 
 
+def _openai_should_try(text: str) -> bool:
+    """OpenAI を叩く前の簡易フィルタ（コスト削減＆不必要な呼び出し回避）"""
+    if not text or not text.strip():
+        return False
+    # 英字がほとんどないなら、既存ロジックに任せる
+    return bool(re.search(r"[A-Za-z]", text))
+
+
+def _is_valid_openai_katakana_only(output: str) -> bool:
+    if not output or not output.strip():
+        return False
+
+    out = output.strip()
+    out = re.sub(r"\s+", " ", out)
+
+    # Latin文字が混ざっていたら不採用
+    if re.search(r"[A-Za-z]", out):
+        return False
+    # ひらがなが混ざっていたら不採用（要件: カタカナのみ）
+    if re.search(r"[\u3040-\u309F]", out):
+        return False
+
+    # カタカナ（＋長音記号）を最低1文字含む
+    if not re.search(r"[\u30A0-\u30FF\u30FC]", out):
+        return False
+
+    # 許可する文字セット（社名/住所で許容したい記号を追加）
+    # - カタカナ、長音、数字、空白、記号（&,-,.,,、等）を許可
+    if not re.fullmatch(
+        r"[\u30A0-\u30FF\u30FC0-9\s&＆\-\.,、，・/’'\"“”「」『』（）()!\?？:；。、]{1,300}",
+        out,
+    ):
+        return False
+
+    return True
+
+
+async def katakana_via_openai_only_words(text: str, kind: str) -> str:
+    """
+    OpenAI で「単語だけ（カタカナのみ / 語間スペースあり）」を生成する。
+    失敗時は空文字を返す（呼び出し側でフォールバックする）。
+    """
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return ""
+
+    if not _openai_should_try(text):
+        return ""
+
+    model = os.environ.get("OPENAI_KATAKANA_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+    kind = kind.strip().lower()
+    if kind == "company":
+        instruction = (
+            "Convert the given company name into natural Japanese katakana transcription. "
+            "Return ONLY the katakana transcription with spaces between words. "
+            "No explanations, no extra text, no quotes. "
+            "Keep numbers unchanged. Keep symbols like '&' and '-' as they are (surround with spaces only if needed). "
+            "Treat possessive 's (e.g., yuto's) as yutos (remove the apostrophe)."
+        )
+    elif kind == "name":
+        instruction = (
+            "Convert the given personal name into natural Japanese katakana transcription. "
+            "Return ONLY the katakana transcription with spaces between words. "
+            "No explanations, no extra text, no quotes. "
+            "Keep numbers unchanged. Keep common separators (spaces)."
+        )
+    elif kind == "address":
+        instruction = (
+            "Convert the given address into Japanese katakana transcription. "
+            "Return ONLY the katakana transcription with spaces between words. "
+            "No explanations, no extra text, no quotes. "
+            "Keep numbers unchanged. Preserve separators such as commas and hyphens (convert to Japanese-safe punctuation if needed)."
+        )
+    else:
+        return ""
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": model,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": "You output only the requested text."},
+            {"role": "user", "content": f"{instruction}\n\nInput:\n{text}"},
+        ],
+    }
+
+    def _call_openai():
+        return requests.post(url, headers=headers, json=payload, timeout=60)
+
+    try:
+        resp = await asyncio.to_thread(_call_openai)
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        out = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+        out = re.sub(r"[\r\n]+", " ", out).strip()
+        out = re.sub(r"\s+", " ", out).strip()
+        if _is_valid_openai_katakana_only(out):
+            return out
+        return ""
+    except Exception:
+        # OpenAI 呼び出しエラー時は黙ってフォールバックする
+        return ""
+
+
 async def get_address_katakana_for_documents(address: str) -> str:
     """
     文書用の住所カタカナ表記を取得する。
@@ -142,6 +256,14 @@ async def get_address_katakana_for_documents(address: str) -> str:
     """
     if not address or not address.strip():
         return ""
+
+    # OpenAI（先に試して、成立したらそれを優先）
+    try:
+        openai_katakana = await katakana_via_openai_only_words(address, kind="address")
+        if openai_katakana:
+            return openai_katakana
+    except Exception:
+        pass
 
     # 1. 既存の安全な Maps ベース変換
     base = get_japanese_address_katakana_safe(address)
@@ -416,6 +538,14 @@ async def name_to_katakana_roman_only(name: str) -> str:
     if not name or not name.strip():
         return ""
 
+    # OpenAI（先に試して、成立したらそれを優先）
+    try:
+        openai_katakana = await katakana_via_openai_only_words(name, kind="name")
+        if openai_katakana:
+            return openai_katakana
+    except Exception:
+        pass
+
     text = name.strip()
     tokens = re.split(r"\s+", text)
     converted: list[str] = []
@@ -454,6 +584,14 @@ async def company_name_to_katakana(name: str) -> str:
     """
     if not name or not name.strip():
         return ""
+
+    # OpenAI（先に試して、成立したらそれを優先）
+    try:
+        openai_katakana = await katakana_via_openai_only_words(name, kind="company")
+        if openai_katakana:
+            return openai_katakana
+    except Exception:
+        pass
 
     # 記号の正規化
     text = name.strip().replace("’", "'")
@@ -918,14 +1056,18 @@ def append_to_spreadsheet(data: FormData, file_paths: dict = None, folder_url: s
         current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # 行データを準備（スプレッドシートの列順に合わせる）
-        # CreatedDate, CompanyName, RepresentativeName, RepresentativeBirthDay, 
-        # RepresentativeAddress, BusinessPurpose1-5, Email Address, FolderURL
+        # CreatedDate, CompanyName,
+        # RepresentativeName, RepresentativeNameLocal, RepresentativeBirthDay,
+        # RepresentativeAddress, RepresentativeAddressLocal,
+        # BusinessPurpose1-5, Email Address, FolderURL
         row_data = [
             current_datetime,  # CreatedDate
             data.companyName,  # CompanyName
             data.presidentName,  # RepresentativeName
+            data.presidentNameLocal,  # RepresentativeNameLocal
             f"{data.birthyear}-{data.birthmonth:02d}-{data.birthday:02d}",  # RepresentativeBirthDay
             data.presidentAddress,  # RepresentativeAddress
+            data.presidentAddressLocal,  # RepresentativeAddressLocal
             data.purpose1,  # BusinessPurpose1
             data.purpose2,  # BusinessPurpose2
             data.purpose3,  # BusinessPurpose3

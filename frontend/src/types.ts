@@ -1,7 +1,9 @@
 export interface FormData {
   companyName: string;
   presidentName: string;
+  presidentNameLocal: string;
   presidentAddress: string;
+  presidentAddressLocal: string;
   birthyear: number;
   birthmonth: number;
   birthday: number;
