@@ -10,6 +10,8 @@ import os
 import re
 import asyncio
 import json
+import traceback
+from functools import lru_cache
 from config import (
     GOOGLE_TRANSLATE_API_KEY, GOOGLE_MAPS_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_USER_ID,
     GOOGLE_DRIVE_CREDENTIALS_PATH, GOOGLE_DRIVE_FOLDER_ID, GOOGLE_SHEETS_SPREADSHEET_ID,
@@ -32,6 +34,18 @@ import romkan2
 import config
 
 # TEMPLATE_DIR は config から取得（Render では backend のカレントディレクトリ）
+
+def _google_api_traceback_enabled() -> bool:
+    """GOOGLE_API_TRACEBACK=1 / true / yes / on のときだけ Google API 周りでスタックトレースを出す。"""
+    v = os.environ.get("GOOGLE_API_TRACEBACK", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _log_google_exception(context: str, exc: BaseException) -> None:
+    if not _google_api_traceback_enabled():
+        return
+    print(f"--- Google API traceback ({context}) ---")
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
 
 # SSL検証回避
 requests.packages.urllib3.disable_warnings()
@@ -444,8 +458,9 @@ async def company_name_to_katakana(name: str) -> str:
     # 記号の正規化
     text = name.strip().replace("’", "'")
     # & や - の前後に空白を入れてトークンとして分離
-    text = re.sub(r"([&\\-–—])", r" \\1 ", text)
-    raw_tokens = re.split(r"\\s+", text.strip())
+    text = re.sub(r"([&\-–—])", r" \1 ", text)
+    # 空白でトークン分割（先に記号の前後へ空白を入れているため、これで安定する）
+    raw_tokens = re.split(r"\s+", text.strip())
 
     # よく使う単語のカスタムマッピング（すべてカタカナ）
     custom_dict = {
@@ -575,11 +590,14 @@ def sanitize_filename(filename: str, max_length: int = 100) -> str:
 
 
 def escape_drive_query_name(name: str) -> str:
-    """Drive検索クエリ用にフォルダ名のシングルクォートをエスケープ"""
+    """Drive検索クエリ用にフォルダ名の特殊文字をエスケープ"""
     if not name:
         return ""
-    # Driveの検索クエリでは、文字列リテラル内のシングルクォートは「\\'」でエスケープする必要がある
-    return name.replace("'", "\\'")
+    # Drive q では、文字列リテラル内の `'` と `\` が特殊扱いになる
+    # まずバックスラッシュをエスケープしてから、シングルクォートを `\'` としてエスケープする
+    escaped = name.replace("\\", "\\\\")
+    escaped = escaped.replace("'", "\\'")
+    return escaped
 
 
 # 出力ファイル名を生成
@@ -640,6 +658,7 @@ def upload_file_to_slack(filepath: str, title: str):
     else:
         print(f"❌ Slackファイルアップロード失敗: {res_json}")
 
+@lru_cache(maxsize=1)
 def get_google_drive_service():
     """Google Drive API を OAuth ユーザー（refresh_token）で取得。ファイルはユーザー所有でアップロードされる。"""
     try:
@@ -661,7 +680,14 @@ def get_google_drive_service():
 
         http = httplib2.Http(timeout=300)
         authorized_http = AuthorizedHttp(creds, http=http)
-        return build("drive", "v3", http=authorized_http)
+        # num_retries を明示して一時的な通信失敗を吸収しやすくする
+        return build(
+            "drive",
+            "v3",
+            http=authorized_http,
+            cache_discovery=False,
+            num_retries=5,
+        )
     except Exception as e:
         print(f"❌ Google Drive認証エラー: {e}")
         import traceback
@@ -700,6 +726,15 @@ async def create_company_folder(company_name: str) -> str:
     """会社名のフォルダをGoogleドライブに作成（重複チェック付き、リトライ付き）"""
     max_retries = 3
     delay = 2
+
+    def _is_timeout_error(err: Exception) -> bool:
+        # WinError 10060 / 通信タイムアウト系の判定
+        s = str(err).lower()
+        return (
+            "10060" in s
+            or "connecttimeout" in s
+            or "timeout" in s
+        )
     
     for attempt in range(max_retries):
         try:
@@ -731,6 +766,11 @@ async def create_company_folder(company_name: str) -> str:
             except Exception as search_error:
                 # 検索エラーが発生した場合は、新規作成を試みる
                 print(f"⚠️ フォルダ検索エラー（新規作成を試みます）: {search_error}")
+                _log_google_exception("create_company_folder: files().list", search_error)
+                # 検索段階でタイムアウトするなら、このリクエスト内ではフォルダ作成を諦める
+                if _is_timeout_error(search_error):
+                    print("⚠️ フォルダ検索がタイムアウトしたため、会社フォルダ作成をスキップします。親フォルダへ直接アップロードします。")
+                    return ""
             
             # フォルダが存在しない場合は新規作成
             folder_metadata = {
@@ -774,13 +814,19 @@ async def create_company_folder(company_name: str) -> str:
         except (OSError, Exception) as e:
             # 接続タイムアウトなどのネットワークエラー
             is_timeout = "10060" in str(e) or "timeout" in str(e).lower() or "ConnectTimeout" in str(type(e).__name__)
-            if is_timeout and attempt < max_retries - 1:
+            if is_timeout:
+                # 会社フォルダ作成だけがコケても、ファイル自体は親フォルダへ直接アップロードできる
+                print(f"⚠️ Google Drive がタイムアウトしたため、会社フォルダ作成をスキップします（親フォルダへ直接アップロード）: {e}")
+                return ""
+
+            if attempt < max_retries - 1:
                 print(f"⚠️ Googleドライブ接続エラー（試行 {attempt + 1}/{max_retries}）、{delay}秒後にリトライ...")
+                print(f"エラー詳細: {e}")
                 await asyncio.sleep(delay)
                 delay *= 2  # 指数バックオフ
-            else:
-                print(f"❌ Googleドライブ接続失敗（{max_retries}回試行後）: {e}")
-                raise
+
+            print(f"❌ Googleドライブ接続失敗（{max_retries}回試行後）: {e}")
+            raise
 
 async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = None) -> str:
     """ファイルをGoogleドライブにアップロード（リトライ付き）"""
@@ -845,6 +891,7 @@ async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = 
                 delay *= 2  # 指数バックオフ
             else:
                 print(f"❌ Googleドライブアップロード接続失敗（{max_retries}回試行後）: {e}")
+                _log_google_exception("upload_file_to_drive: HttpError", e)
                 raise
         except (OSError, Exception) as e:
             # 接続タイムアウトなどのネットワークエラー
@@ -855,6 +902,7 @@ async def upload_file_to_drive(file_path: str, folder_id: str, file_name: str = 
                 delay *= 2  # 指数バックオフ
             else:
                 print(f"❌ Googleドライブアップロード接続失敗（{max_retries}回試行後）: {e}")
+                _log_google_exception("upload_file_to_drive: network", e)
                 raise
 
 def append_to_spreadsheet(data: FormData, file_paths: dict = None, folder_url: str = ""):
@@ -903,6 +951,7 @@ def append_to_spreadsheet(data: FormData, file_paths: dict = None, folder_url: s
         print(f"✅ Spreadsheet記録成功: {result.get('updates').get('updatedCells')} セル更新")
     except Exception as e:
         print(f"❌ Spreadsheet記録エラー: {e}")
+        _log_google_exception("append_to_spreadsheet", e)
         # エラーが発生しても処理を続行
 
 
@@ -1206,8 +1255,11 @@ async def _background_submit_task(data: FormData) -> None:
         try:
             if GOOGLE_DRIVE_FOLDER_ID:
                 folder_id = await create_company_folder(data.companyName)
-                folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-                print(f"✅ 会社フォルダを使用: {folder_url}")
+                if folder_id:
+                    folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
+                    print(f"✅ 会社フォルダを使用: {folder_url}")
+                else:
+                    print("⚠️ 会社フォルダは作成できなかったため、親フォルダへ直接アップロードします。")
             else:
                 print("⚠️ GOOGLE_DRIVE_FOLDER_ID が未設定のため、会社フォルダは作成しません。")
         except Exception as e:

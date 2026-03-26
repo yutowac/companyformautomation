@@ -26,7 +26,7 @@ export const en = {
   errorSubmissionFailed: 'Submission failed',
   errorDownloadFailed: 'Download failed',
   placeholderCompanyName: 'YourCompany',
-  placeholderPresidentName: 'John Doe',
+  placeholderPresidentName: 'John Smith',
   placeholderPresidentAddress: '9-8-7 bef Apartment, Chiyoda, Tokyo',
   placeholderYear: 'yyyy',
   placeholderMonth: 'mm',
