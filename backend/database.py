@@ -67,11 +67,9 @@ def init_db() -> None:
 
 
 def _seed_test_user() -> None:
-    from passlib.context import CryptContext
-
+    from auth_service import hash_password
     from models import User
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     SL = get_session_local()
     assert SL is not None
     with SL() as db:
@@ -80,7 +78,7 @@ def _seed_test_user() -> None:
             return
         user = User(
             email=AUTH_TEST_EMAIL,
-            password_hash=pwd_context.hash(AUTH_TEST_PASSWORD),
+            password_hash=hash_password(AUTH_TEST_PASSWORD),
         )
         db.add(user)
         db.commit()
@@ -109,11 +107,9 @@ def _sample_application_payload(email: str) -> dict:
 
 def _seed_sample_data() -> None:
     """Seed applied user + one pending application (local / SEED_SAMPLE_DATA only)."""
-    from passlib.context import CryptContext
-
+    from auth_service import hash_password
     from models import Application, ApplicationStatus, User
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     SL = get_session_local()
     assert SL is not None
     with SL() as db:
@@ -121,7 +117,7 @@ def _seed_sample_data() -> None:
         if not user:
             user = User(
                 email=SAMPLE_APPLIED_EMAIL,
-                password_hash=pwd_context.hash(SAMPLE_APPLIED_PASSWORD),
+                password_hash=hash_password(SAMPLE_APPLIED_PASSWORD),
             )
             db.add(user)
             db.flush()
