@@ -4,31 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Company Registration Form</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css" type="text/css">
 </head>
 <body>
-    <!-- Language toggle removed (English only) -->
-
     <main class="page-container">
-        <!-- ページ1: ランディング -->
-        <div id="page-landing" class="page">
-            <div class="page-inner">
-                <h1 data-i18n="page1Title">One-Stop incで法人設立の申請をする</h1>
-                <p class="description" data-i18n="page1Description">法人設立の申請を行います。よろしければ「はい」を押してフォームへ進んでください。</p>
-                <div class="button-row">
-                    <button
-                        type="button"
-                        class="btn-primary"
-                        onclick="location.hash='#/form'"
-                        data-i18n="page1Yes"
-                    >
-                        はい
+        <!-- Login -->
+        <div id="page-login" class="page page-visible page-active">
+            <div class="page-inner login-page-inner">
+                <h1>Login</h1>
+                <p class="description">Sign in with your test account.</p>
+                <div class="login-form">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" autocomplete="username" placeholder="test@example.com">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" autocomplete="current-password" placeholder="">
+                    <p id="loginError" class="login-error" style="display:none;"></p>
+                    <div class="button-row">
+                        <button type="button" class="btn-primary" onclick="loginSubmit()">Login</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="app-shell" class="app-shell hidden">
+            <div class="app-main">
+        <!-- Home -->
+        <div id="page-home" class="page">
+            <div class="page-inner home-page-inner">
+                <div class="home-topbar">
+                    <a href="#/login" class="logout-link" onclick="logout(); return false;">→ Logout</a>
+                </div>
+                <h1 class="home-title">Home</h1>
+                <p class="description">Create a new application or check your application status.</p>
+
+                <div class="home-status-card" id="homeStatusCard">
+                    <p class="home-status-label">Application status</p>
+                    <p class="home-status-value" id="homeStatusValue">Loading...</p>
+                    <p class="home-status-meta" id="homeStatusMeta"></p>
+                </div>
+
+                <div class="home-actions">
+                    <button type="button" class="btn-primary home-action-btn" id="btnNewApplication" onclick="navToForm()">
+                        New application
+                    </button>
+                    <button type="button" class="btn-secondary home-action-btn" id="btnViewApplication" onclick="navToApplications()">
+                        Check application status
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- ページ2: フォーム入力 -->
+        <!-- Form -->
         <div id="page-form" class="page">
             <div class="page-inner">
                 <div class="form-header">
@@ -160,7 +189,8 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="button" class="btn-primary" onclick="goToConfirm()" data-i18n="submit">Submit</button>
+                        <button type="button" class="btn-secondary" onclick="navToHome()">Back to Home</button>
+                        <button type="button" class="btn-primary" onclick="goToConfirm()">Done</button>
                     </div>
                 </form>
 
@@ -173,25 +203,7 @@
             </div>
         </div>
 
-        <!-- ページ3: サンクス -->
-        <div id="page-thanks" class="page">
-            <div class="page-inner">
-                <h1 data-i18n="thanksTitle">申請ありがとうございます。</h1>
-                <p class="thanks-message" data-i18n="thanksMessage">準備が整い次第、こちらから連絡します。</p>
-                <div class="button-row">
-                    <button
-                        type="button"
-                        class="btn-primary"
-                        onclick="location.hash='#/'"
-                        data-i18n="backToHome"
-                    >
-                        ホームへ戻る
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ページ4: 入力内容確認 -->
+        <!-- Confirm -->
         <div id="page-confirm" class="page">
             <div class="page-inner">
                 <h1>Confirm your information</h1>
@@ -240,16 +252,92 @@
                         class="btn-secondary"
                         onclick="backToFormFromConfirm()"
                     >
-                        Back
+                        Edit
                     </button>
                     <button
                         type="button"
                         class="btn-primary"
                         onclick="confirmAndSubmit()"
                     >
-                        Yes, I confirm
+                        Submit
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Thanks -->
+        <div id="page-thanks" class="page">
+            <div class="page-inner">
+                <h1 data-i18n="thanksTitle">Thank you for your application.</h1>
+                <p class="thanks-message" data-i18n="thanksMessage">We will contact you once everything is ready.</p>
+                <div class="button-row">
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick="navToHome()"
+                        data-i18n="backToHome"
+                    >
+                        Back to Home
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Application status (detail) -->
+        <div id="page-applications" class="page">
+            <div class="page-inner applications-page-inner">
+                <div class="application-detail-header">
+                    <span class="status-badge" id="applicationStatusBadge">Pending</span>
+                    <h1>Application status</h1>
+                </div>
+                <p class="application-detail-meta" id="applicationSubmittedAt"></p>
+
+                <div class="confirm-card" id="applicationDetailCard">
+                    <div class="confirm-row">
+                        <p class="confirm-label">Company Name</p>
+                        <p class="confirm-value" id="detail_companyName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Name (English)</p>
+                        <p class="confirm-value" id="detail_presidentName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Name (Local Language)</p>
+                        <p class="confirm-value" id="detail_presidentNameLocal"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Birth Day</p>
+                        <p class="confirm-value" id="detail_birthDay"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Address (English)</p>
+                        <p class="confirm-value" id="detail_presidentAddress"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Representative Address (Local Language)</p>
+                        <p class="confirm-value" id="detail_presidentAddressLocal"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Business Purposes</p>
+                        <p class="confirm-value" id="detail_purposes"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Email Address</p>
+                        <p class="confirm-value" id="detail_email"></p>
+                    </div>
+                </div>
+
+                <div class="application-detail-actions">
+                    <button type="button" class="btn-secondary" onclick="navToHome()">Back to Home</button>
+                </div>
+
+                <p class="change-request-note">
+                    Need to change your application?
+                    <a id="changeRequestLink" class="change-request-link" href="#" target="_blank" rel="noopener noreferrer">Click here</a>
+                </p>
+            </div>
+        </div>
+
             </div>
         </div>
     </main>

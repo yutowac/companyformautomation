@@ -6,6 +6,7 @@
 # 2. Render ダッシュボードで "New" → "Blueprint"
 # 3. このリポジトリを接続して render.yaml を認識させる
 # 4. 環境変数をダッシュボードで設定（DEPLOY.md 参照）
+# PostgreSQL 構築・接続手順: docs/render-postgresql-setup.md
 
 services:
   - type: web

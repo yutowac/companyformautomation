@@ -55,3 +55,23 @@ TEMPLATE_DIR = os.getenv("TEMPLATE_DIR", os.path.dirname(os.path.abspath(__file_
 # OpenAI（カタカナ変換用・任意）
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_KATAKANA_MODEL = os.getenv("OPENAI_KATAKANA_MODEL", "gpt-4o-mini")
+
+# PostgreSQL + JWT（ログイン・申請保存用）
+DATABASE_URL = os.getenv("DATABASE_URL")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30日相当（テスト用。本番は短く推奨）
+
+# テストアカウント（起動時に DB に未存在なら作成）
+AUTH_TEST_EMAIL = os.getenv("AUTH_TEST_EMAIL", "test@example.com")
+AUTH_TEST_PASSWORD = os.getenv("AUTH_TEST_PASSWORD", "testpassword123")
+
+# ローカル用サンプルデータ（申請済みユーザー）。本番では true にしないこと
+SEED_SAMPLE_DATA = os.getenv("SEED_SAMPLE_DATA", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+SAMPLE_APPLIED_EMAIL = os.getenv("SAMPLE_APPLIED_EMAIL", "applied@example.com")
+SAMPLE_APPLIED_PASSWORD = os.getenv("SAMPLE_APPLIED_PASSWORD", "testpassword123")

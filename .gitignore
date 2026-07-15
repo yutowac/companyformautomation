@@ -89,5 +89,8 @@ backup/
 *-local.md
 *.local.md
 
+# ドキュメント（ローカル専用）
+docs/
+
 
 

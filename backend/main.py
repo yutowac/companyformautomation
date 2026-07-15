@@ -1,10 +1,12 @@
 # パッケージ
-from fastapi import FastAPI, HTTPException, Response
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException, Response
 from pydantic import BaseModel
 import requests
 from docx import Document
 from openpyxl import load_workbook
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 import os
 import re
@@ -20,6 +22,12 @@ from config import (
     GOOGLE_DRIVE_OAUTH_TOKEN_URI, GOOGLE_DRIVE_OAUTH_SCOPES,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+from auth_routes import router as auth_router
+from database import get_db, init_db
+from deps import get_current_user
+from models import Application, ApplicationStatus, User
 
 import uvicorn
 from google.oauth2 import service_account
@@ -50,7 +58,14 @@ def _log_google_exception(context: str, exc: BaseException) -> None:
 # SSL検証回避
 requests.packages.urllib3.disable_warnings()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)
 
 # CORS 設定を追加
 app.add_middleware(
@@ -1428,8 +1443,25 @@ async def _background_submit_task(data: FormData) -> None:
 
 
 @app.post("/submit-application")
-async def submit_application(data: FormData):
-    """申請を受理し即座に200を返し、ファイル生成・Drive・Spreadsheetはバックグラウンドで実行"""
+async def submit_application(
+    data: FormData,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """申請を受理し即座に200を返し、ファイル生成・Drive・Spreadsheetはバックグラウンドで実行（要ログイン・1ユーザー1申請）"""
+    existing = db.query(Application).filter(Application.user_id == current_user.id).count()
+    if existing > 0:
+        raise HTTPException(status_code=409, detail="Application already submitted")
+    now = datetime.now(timezone.utc)
+    row = Application(
+        user_id=current_user.id,
+        payload=data.model_dump(),
+        status=ApplicationStatus.PENDING.value,
+        submitted_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    db.commit()
     asyncio.create_task(_background_submit_task(data))
     return {"message": "accepted"}
 

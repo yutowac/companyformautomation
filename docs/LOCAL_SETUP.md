@@ -1,5 +1,7 @@
 # ローカル環境での起動方法
 
+> **PostgreSQL（Docker）とログイン／サンプルデータ**: 詳細は [local-database-setup.md](./local-database-setup.md) を参照してください。
+
 ## 前提条件
 
 1. Python 3.8以上がインストールされていること

@@ -205,7 +205,7 @@
 }
 
 body {
-    font-family: 'Noto Sans JP', 'Helvetica Neue', 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+    font-family: 'Source Sans 3', 'Helvetica Neue', 'Segoe UI', sans-serif;
     margin: 0;
     padding: 10px;
     background-color: #f4f7f9;
@@ -215,6 +215,8 @@ body {
     min-height: 100vh;
     flex-direction: column;
     overflow-x: hidden;
+    color: #1f2d3d;
+    -webkit-font-smoothing: antialiased;
 }
 
 .site-header {
@@ -255,6 +257,7 @@ body {
 }
 
 h1 {
+    font-family: 'Source Serif 4', 'Georgia', serif;
     font-size: 24px;
     font-weight: 600;
     color: #2c3e50;
@@ -263,7 +266,7 @@ h1 {
     text-align: center;
     width: 100%;
     padding: 10px 0 15px 0;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.2px;
 }
 
 @media (min-width: 768px) {
@@ -694,5 +697,253 @@ button:active {
 
     .footer-text {
         font-size: 13px;
+    }
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ログイン */
+.login-page-inner {
+    max-width: 420px;
+}
+
+.login-form label {
+    margin-top: 10px;
+}
+
+.login-error {
+    color: #c0392b;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+/* ログイン後シェル（サイドバーなし） */
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+}
+
+.app-main {
+    flex: 1;
+    position: relative;
+    min-height: 480px;
+    overflow: auto;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.app-main .page {
+    position: absolute;
+    inset: 0;
+}
+
+/* Home */
+.home-page-inner {
+    max-width: 640px;
+}
+
+.home-topbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.logout-link {
+    display: inline-block;
+    font-family: 'Source Sans 3', 'Helvetica Neue', 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+    text-decoration: none;
+    letter-spacing: 0.2px;
+    padding: 4px 0;
+    background: none;
+    border: none;
+    width: auto;
+    min-height: auto;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.logout-link:hover {
+    color: #1e40af;
+    text-decoration: underline;
+    background: none;
+    box-shadow: none;
+    transform: none;
+}
+
+.home-title {
+    text-align: left;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding-top: 0;
+}
+
+.home-status-card {
+    margin: 20px 0;
+    padding: 16px 18px;
+    background: #f8fafc;
+    border: 1px solid #e8edf2;
+    border-radius: 10px;
+}
+
+.home-status-label {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.home-status-value {
+    margin: 0;
+    font-family: 'Source Serif 4', 'Georgia', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f2d3d;
+}
+
+.home-status-meta {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.home-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.home-action-btn {
+    width: 100% !important;
+}
+
+.home-action-btn:disabled,
+.home-action-btn.nav-disabled,
+button.nav-disabled:disabled {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.form-actions button {
+    min-width: 120px;
+}
+
+/* Application detail */
+.applications-page-inner {
+    max-width: 720px;
+}
+
+.application-detail-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.application-detail-header h1 {
+    margin: 0;
+    text-align: left;
+    padding-top: 0;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.status-badge.status-pending {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+}
+
+.status-badge.status-in_review {
+    background: #dbeafe;
+    color: #1e40af;
+    border-color: #93c5fd;
+}
+
+.status-badge.status-completed {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #86efac;
+}
+
+.status-badge.status-rejected {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+}
+
+.application-detail-meta {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.application-detail-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+.application-detail-actions button {
+    min-width: 140px;
+}
+
+.change-request-note {
+    margin: 20px 0 0;
+    font-size: 14px;
+    color: #475569;
+}
+
+.change-request-link {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.change-request-link:hover {
+    color: #1e40af;
+}
+
+@media (max-width: 767px) {
+    .form-actions,
+    .application-detail-actions {
+        flex-direction: column;
+    }
+
+    .form-actions button,
+    .application-detail-actions button {
+        width: 100%;
     }
 }

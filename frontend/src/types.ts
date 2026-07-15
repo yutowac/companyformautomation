@@ -23,5 +23,21 @@ export interface ApiError {
   detail: string;
 }
 
-export type Language = 'ja' | 'en';
+export type ApplicationStatusCode = 'pending' | 'in_review' | 'completed' | 'rejected' | string;
 
+export interface MeResponse {
+  email: string;
+  has_application: boolean;
+  application_status: ApplicationStatusCode | null;
+  application_submitted_at: string | null;
+}
+
+export interface ApplicationListItem {
+  id: number;
+  created_at: string;
+  submitted_at: string | null;
+  status: ApplicationStatusCode;
+  payload: Record<string, unknown>;
+}
+
+export type Language = 'ja' | 'en';

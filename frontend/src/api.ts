@@ -1,6 +1,28 @@
-import type { FormData, ApiResponse, ApiError } from './types';
+import type { FormData, ApiResponse, ApiError, MeResponse, ApplicationListItem } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:10000';
+
+const ACCESS_TOKEN_KEY = 'access_token';
+
+export function getAccessToken(): string | null {
+  return sessionStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function setAccessToken(token: string): void {
+  sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+export function clearAccessToken(): void {
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
+function parseErrorDetail(err: unknown): string {
+  if (err && typeof err === 'object' && 'detail' in err) {
+    const d = (err as ApiError).detail;
+    if (typeof d === 'string') return d;
+  }
+  return 'Request failed';
+}
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -111,17 +133,67 @@ export async function recordToSpreadsheet(data: FormData): Promise<ApiResponse> 
   return handleResponse<ApiResponse>(response);
 }
 
-/** 申請を送信し、即座に200で受理。ファイル生成・Drive・Spreadsheetはバックエンドで非同期実行 */
-export async function submitApplication(data: FormData): Promise<{ message: string }> {
-  const response = await fetch(`${API_BASE_URL}/submit-application`, {
+export async function loginRequest(email: string, password: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: 'Incorrect email or password' }));
+    throw new Error(parseErrorDetail(err));
+  }
+  const data = (await response.json()) as { access_token: string };
+  setAccessToken(data.access_token);
+}
+
+export async function getMe(): Promise<MeResponse> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  const response = await fetch(`${API_BASE_URL}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(parseErrorDetail(err));
+  }
+  return response.json() as Promise<MeResponse>;
+}
+
+export async function listApplications(): Promise<ApplicationListItem[]> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  const response = await fetch(`${API_BASE_URL}/applications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(parseErrorDetail(err));
+  }
+  return response.json() as Promise<ApplicationListItem[]>;
+}
+
+/** 申請を送信し、即座に200で受理。ファイル生成・Drive・Spreadsheetはバックエンドで非同期実行 */
+export async function submitApplication(data: FormData): Promise<{ message: string }> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('ログインが必要です');
+  }
+  const response = await fetch(`${API_BASE_URL}/submit-application`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(data),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
-    const msg = typeof (err as ApiError).detail === 'string' ? (err as ApiError).detail : JSON.stringify((err as ApiError).detail);
-    throw new Error(msg || `HTTP error! status: ${response.status}`);
+    throw new Error(parseErrorDetail(err));
   }
   return response.json();
 }

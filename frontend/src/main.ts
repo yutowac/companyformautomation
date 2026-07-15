@@ -1,82 +1,415 @@
-import type { FormData, Language } from './types';
+import type { FormData, Language, MeResponse } from './types';
 import {
   submitApplication,
   downloadRegistrationApplication,
   downloadArticleOfIncorporation,
   downloadSealRegistration,
+  loginRequest,
+  getMe,
+  listApplications,
+  clearAccessToken,
+  getAccessToken,
 } from './api';
 import { getLanguage, setLanguage, t, getTranslations } from './i18n';
 
-type PageId = 'landing' | 'form' | 'confirm' | 'thanks';
+type ShellPageId = 'page-home' | 'page-form' | 'page-confirm' | 'page-thanks' | 'page-applications';
 
-function showPage(pageId: PageId): void {
-  const newPage = document.getElementById(`page-${pageId}`) as HTMLElement | null;
-  if (!newPage) return;
+let hasApplication = false;
+let applicationStatus: string | null = null;
+let applicationSubmittedAt: string | null = null;
 
-  const current = document.querySelector<HTMLElement>('.page.page-visible.page-active');
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  in_review: 'In review',
+  completed: 'Completed',
+  rejected: 'Rejected',
+};
 
-  // すでに表示中なら何もしない
-  if (current === newPage) {
+function getStatusLabel(status: string | null | undefined): string {
+  if (!status) return 'No application';
+  return STATUS_LABELS[status] ?? status;
+}
+
+function getRawHash(): string {
+  const h = window.location.hash;
+  if (!h || h === '#') {
+    return '#/';
+  }
+  return h;
+}
+
+function normalizeLegacyAppHash(h: string): string {
+  const map: Record<string, string> = {
+    '#/form': '#/app/form',
+    '#/confirm': '#/app/confirm',
+    '#/thanks': '#/app/thanks',
+  };
+  if (map[h]) {
+    return map[h];
+  }
+  if (h === '#/app' || h === '#/app/') {
+    return '#/app/home';
+  }
+  return h;
+}
+
+function showLoginView(): void {
+  const login = document.getElementById('page-login');
+  const shell = document.getElementById('app-shell');
+  shell?.classList.add('hidden');
+  login?.classList.remove('hidden');
+  login?.classList.add('page-visible', 'page-active');
+}
+
+function showAppShellView(): void {
+  const login = document.getElementById('page-login');
+  const shell = document.getElementById('app-shell');
+  login?.classList.add('hidden');
+  login?.classList.remove('page-visible', 'page-active');
+  shell?.classList.remove('hidden');
+}
+
+function showShellPage(pageId: ShellPageId): void {
+  document.querySelectorAll<HTMLElement>('.app-main .page').forEach((p) => {
+    p.classList.remove('page-visible', 'page-active', 'page-leave');
+  });
+  const el = document.getElementById(pageId);
+  if (!el) {
     return;
   }
+  el.classList.add('page-visible', 'page-active');
+}
 
-  // 退場アニメーション（現在のページ）
-  if (current) {
-    current.classList.remove('page-active');
-    current.classList.add('page-leave');
+function applyMeState(me: MeResponse): void {
+  hasApplication = me.has_application;
+  applicationStatus = me.application_status;
+  applicationSubmittedAt = me.application_submitted_at;
+  updateHomeButtons();
+}
 
-    const handleLeaveEnd = (event: TransitionEvent) => {
-      if (event.propertyName !== 'opacity') return;
-      current.classList.remove('page-leave', 'page-visible');
-    };
+async function syncMe(): Promise<void> {
+  const me = await getMe();
+  applyMeState(me);
+}
 
-    current.addEventListener('transitionend', handleLeaveEnd, { once: true });
+function updateHomeButtons(): void {
+  const btnNew = document.getElementById('btnNewApplication') as HTMLButtonElement | null;
+  const btnView = document.getElementById('btnViewApplication') as HTMLButtonElement | null;
+  if (btnNew) {
+    btnNew.disabled = hasApplication;
+    btnNew.classList.toggle('nav-disabled', hasApplication);
   }
-
-  // 入場アニメーション（新しいページ）
-  newPage.classList.remove('page-leave');
-  newPage.classList.add('page-visible');
-  // 再描画を挟んでからactiveを付与してフェードインさせる
-  void newPage.offsetWidth;
-  newPage.classList.add('page-active');
-
-  // ホームに戻ったタイミングでフォームをクリア
-  if (pageId === 'landing') {
-    resetFormFields();
-    generatedFilenames = {};
+  if (btnView) {
+    btnView.disabled = !hasApplication;
+    btnView.classList.toggle('nav-disabled', !hasApplication);
   }
 }
 
-function routeFromHash(hash: string): PageId {
-  switch (hash) {
-    case '#/form':
-      return 'form';
-    case '#/confirm':
-      return 'confirm';
-    case '#/thanks':
-      return 'thanks';
-    case '#/':
-    default:
-      return 'landing';
+function updateHomeStatusCard(): void {
+  const valueEl = document.getElementById('homeStatusValue');
+  const metaEl = document.getElementById('homeStatusMeta');
+  if (!valueEl) return;
+
+  if (!hasApplication) {
+    valueEl.textContent = 'No application';
+    if (metaEl) metaEl.textContent = '';
+    return;
+  }
+
+  valueEl.textContent = getStatusLabel(applicationStatus);
+  if (metaEl) {
+    metaEl.textContent = applicationSubmittedAt
+      ? `Submitted: ${formatDisplayDate(applicationSubmittedAt)}`
+      : '';
+  }
+}
+
+function formatDisplayDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('en-US');
+  } catch {
+    return iso;
+  }
+}
+
+function setText(id: string, value: string): void {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function payloadToFormData(payload: Record<string, unknown>): FormData {
+  const num = (v: unknown): number => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') return parseInt(v, 10);
+    return NaN;
+  };
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  return {
+    companyName: str(payload.companyName),
+    presidentName: str(payload.presidentName),
+    presidentNameLocal: str(payload.presidentNameLocal),
+    presidentAddress: str(payload.presidentAddress),
+    presidentAddressLocal: str(payload.presidentAddressLocal),
+    birthyear: num(payload.birthyear),
+    birthmonth: num(payload.birthmonth),
+    birthday: num(payload.birthday),
+    purpose1: str(payload.purpose1),
+    purpose2: str(payload.purpose2),
+    purpose3: str(payload.purpose3),
+    purpose4: str(payload.purpose4),
+    purpose5: str(payload.purpose5),
+    email: str(payload.email),
+  };
+}
+
+function formatBirthDay(data: FormData): string {
+  const y = data.birthyear;
+  const m = data.birthmonth;
+  const d = data.birthday;
+  if ([y, m, d].some((n) => Number.isNaN(n))) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function renderApplicationSummary(data: FormData, prefix: 'confirm' | 'detail'): void {
+  setText(`${prefix}_companyName`, data.companyName || '-');
+  setText(`${prefix}_presidentName`, data.presidentName || '-');
+  setText(`${prefix}_presidentNameLocal`, data.presidentNameLocal || '-');
+  setText(`${prefix}_birthDay`, formatBirthDay(data) || '-');
+  setText(`${prefix}_presidentAddress`, data.presidentAddress || '-');
+  setText(`${prefix}_presidentAddressLocal`, data.presidentAddressLocal || '-');
+
+  const purposes = [data.purpose1, data.purpose2, data.purpose3, data.purpose4, data.purpose5]
+    .map((p) => p?.trim())
+    .filter((p) => p);
+  setText(`${prefix}_purposes`, purposes.length ? purposes.join(', ') : '-');
+  setText(`${prefix}_email`, data.email || '-');
+}
+
+function renderConfirmPage(data: FormData): void {
+  renderApplicationSummary(data, 'confirm');
+}
+
+const DEFAULT_CHANGE_REQUEST_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSfFaHomIpvrEwNFCYvQ6s8u7XwYZaiuC2VitvBGJUXK8Hu6Fw/viewform?usp=publish-editor';
+
+function setChangeRequestLinkHref(): void {
+  const el = document.getElementById('changeRequestLink') as HTMLAnchorElement | null;
+  if (!el) return;
+  const raw = import.meta.env.VITE_APPLICATION_CHANGE_URL;
+  const url = typeof raw === 'string' && raw.trim() ? raw.trim() : DEFAULT_CHANGE_REQUEST_URL;
+  el.href = url;
+}
+
+async function loadApplicationDetail(): Promise<void> {
+  const badge = document.getElementById('applicationStatusBadge');
+  const meta = document.getElementById('applicationSubmittedAt');
+
+  try {
+    const rows = await listApplications();
+    if (rows.length === 0) {
+      window.location.hash = '#/app/home';
+      return;
+    }
+    const row = rows[0];
+    const statusLabel = getStatusLabel(row.status);
+    if (badge) {
+      badge.textContent = statusLabel;
+      badge.className = `status-badge status-${row.status || 'pending'}`;
+    }
+    if (meta) {
+      const when = row.submitted_at || row.created_at;
+      meta.textContent = when ? `Submitted: ${formatDisplayDate(when)}` : '';
+    }
+    renderApplicationSummary(payloadToFormData(row.payload), 'detail');
+  } catch {
+    if (badge) badge.textContent = 'Error';
+    if (meta) meta.textContent = 'Failed to load application.';
   }
 }
 
 function renderRoute(): void {
-  let hash = window.location.hash;
-  if (!hash || hash === '#') {
-    // デフォルトはトップページ
-    hash = '#/';
-    if (window.location.hash !== hash) {
-      window.location.hash = hash;
+  const raw = getRawHash();
+  const mapped = normalizeLegacyAppHash(raw);
+  if (mapped !== raw) {
+    window.location.hash = mapped;
+    return;
+  }
+
+  const token = getAccessToken();
+
+  if (!token) {
+    showLoginView();
+    if (!mapped.startsWith('#/login')) {
+      window.location.hash = '#/login';
+    }
+    return;
+  }
+
+  showAppShellView();
+
+  if (mapped === '#/login' || mapped === '#/') {
+    window.location.hash = '#/app/home';
+    return;
+  }
+
+  if (!mapped.startsWith('#/app/')) {
+    window.location.hash = '#/app/home';
+    return;
+  }
+
+  if (mapped === '#/app/home') {
+    void (async () => {
+      try {
+        await syncMe();
+        updateHomeStatusCard();
+        showShellPage('page-home');
+      } catch {
+        clearAccessToken();
+        hasApplication = false;
+        applicationStatus = null;
+        applicationSubmittedAt = null;
+        updateHomeButtons();
+        window.location.hash = '#/login';
+      }
+    })();
+    return;
+  }
+
+  if (mapped === '#/app/form') {
+    void (async () => {
+      try {
+        await syncMe();
+        if (hasApplication) {
+          if (window.location.hash === '#/app/form') {
+            window.location.hash = '#/app/home';
+          }
+          return;
+        }
+        showShellPage('page-form');
+      } catch {
+        clearAccessToken();
+        hasApplication = false;
+        updateHomeButtons();
+        window.location.hash = '#/login';
+      }
+    })();
+    return;
+  }
+
+  if (mapped === '#/app/confirm') {
+    if (!pendingFormData) {
+      window.location.hash = '#/app/form';
       return;
     }
+    void (async () => {
+      try {
+        await syncMe();
+        showShellPage('page-confirm');
+      } catch {
+        clearAccessToken();
+        window.location.hash = '#/login';
+      }
+    })();
+    return;
   }
-  const pageId = routeFromHash(hash);
-  showPage(pageId);
+
+  if (mapped === '#/app/thanks') {
+    void (async () => {
+      try {
+        await syncMe();
+        showShellPage('page-thanks');
+      } catch {
+        clearAccessToken();
+        window.location.hash = '#/login';
+      }
+    })();
+    return;
+  }
+
+  if (mapped === '#/app/applications') {
+    void (async () => {
+      try {
+        await syncMe();
+        if (!hasApplication) {
+          window.location.hash = '#/app/home';
+          return;
+        }
+        showShellPage('page-applications');
+        await loadApplicationDetail();
+      } catch {
+        clearAccessToken();
+        window.location.hash = '#/login';
+      }
+    })();
+    return;
+  }
+
+  window.location.hash = '#/app/home';
 }
 
 function handleHashChange(): void {
   renderRoute();
+}
+
+async function loginSubmit(): Promise<void> {
+  const emailEl = document.getElementById('loginEmail') as HTMLInputElement | null;
+  const passEl = document.getElementById('loginPassword') as HTMLInputElement | null;
+  const errEl = document.getElementById('loginError') as HTMLElement | null;
+  const email = emailEl?.value.trim() ?? '';
+  const password = passEl?.value ?? '';
+  if (!email || !password) {
+    if (errEl) {
+      errEl.style.display = 'block';
+      errEl.textContent = 'Please enter email and password.';
+    }
+    return;
+  }
+  try {
+    await loginRequest(email, password);
+    if (errEl) {
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+    }
+    await syncMe();
+    window.location.hash = '#/app/home';
+  } catch (e) {
+    if (errEl) {
+      errEl.style.display = 'block';
+      errEl.textContent = e instanceof Error ? e.message : 'Login failed';
+    }
+  }
+}
+
+function logout(): void {
+  clearAccessToken();
+  hasApplication = false;
+  applicationStatus = null;
+  applicationSubmittedAt = null;
+  updateHomeButtons();
+  pendingFormData = null;
+  resetFormFields();
+  generatedFilenames = {};
+  window.location.hash = '#/login';
+}
+
+function navToHome(): void {
+  window.location.hash = '#/app/home';
+}
+
+function navToForm(): void {
+  if (hasApplication) {
+    return;
+  }
+  window.location.hash = '#/app/form';
+}
+
+function navToApplications(): void {
+  if (!hasApplication) {
+    return;
+  }
+  window.location.hash = '#/app/applications';
 }
 
 function updateLanguageToggleUI(lang: Language): void {
@@ -156,7 +489,6 @@ function resetFormFields(): void {
     }
   });
 
-  // purpose2〜purpose5 は初期状態だと非表示
   const purposeGroups = ['purpose2Group', 'purpose3Group', 'purpose4Group', 'purpose5Group'];
   purposeGroups.forEach((id) => {
     const group = document.getElementById(id) as HTMLElement | null;
@@ -182,16 +514,15 @@ function validateFormData(data: FormData): boolean {
     alert(t('errorRequiredFields'));
     return false;
   }
-  
+
   if (!data.email || !validateEmail(data.email)) {
     alert(t('errorInvalidEmail'));
     return false;
   }
-  
+
   return true;
 }
 
-// 生成されたファイル名を保存（ダウンロードボタン用・現在は非表示だが将来用に保持）
 let generatedFilenames: {
   registrationApplication?: string;
   articleOfIncorporation?: string;
@@ -199,35 +530,6 @@ let generatedFilenames: {
 } = {};
 
 let pendingFormData: FormData | null = null;
-
-function formatBirthDay(data: FormData): string {
-  const y = data.birthyear;
-  const m = data.birthmonth;
-  const d = data.birthday;
-  if ([y, m, d].some((n) => Number.isNaN(n))) return '';
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-function renderConfirmPage(data: FormData): void {
-  const setText = (id: string, value: string) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  };
-
-  setText('confirm_companyName', data.companyName || '-');
-  setText('confirm_presidentName', data.presidentName || '-');
-  setText('confirm_presidentNameLocal', data.presidentNameLocal || '-');
-  setText('confirm_birthDay', formatBirthDay(data) || '-');
-  setText('confirm_presidentAddress', data.presidentAddress || '-');
-  setText('confirm_presidentAddressLocal', data.presidentAddressLocal || '-');
-
-  const purposes = [data.purpose1, data.purpose2, data.purpose3, data.purpose4, data.purpose5]
-    .map((p) => p?.trim())
-    .filter((p) => p);
-  setText('confirm_purposes', purposes.length ? purposes.join(', ') : '-');
-
-  setText('confirm_email', data.email || '-');
-}
 
 function addPurpose(): void {
   const order = ['purpose2Group', 'purpose3Group', 'purpose4Group', 'purpose5Group'];
@@ -241,7 +543,6 @@ function addPurpose(): void {
   const nextGroup = document.getElementById(nextId) as HTMLElement | null;
   if (nextGroup) nextGroup.style.display = 'block';
 
-  // purpose5 まで出たら add ボタンを隠す
   const allVisible = order.every((id) => {
     const group = document.getElementById(id) as HTMLElement | null;
     return group && group.style.display !== 'none';
@@ -256,49 +557,45 @@ async function goToConfirm(): Promise<void> {
 
   pendingFormData = formData;
   renderConfirmPage(formData);
-  window.location.hash = '#/confirm';
+  window.location.hash = '#/app/confirm';
 }
 
 function backToFormFromConfirm(): void {
-  window.location.hash = '#/form';
+  window.location.hash = '#/app/form';
 }
 
 async function confirmAndSubmit(): Promise<void> {
   if (!pendingFormData) {
-    window.location.hash = '#/form';
+    window.location.hash = '#/app/form';
     return;
   }
 
   try {
     await submitApplication(pendingFormData);
-    window.location.hash = '#/thanks';
+    await syncMe();
+    window.location.hash = '#/app/thanks';
   } catch (error) {
     const message = error instanceof Error ? error.message : t('errorSubmissionFailed');
     alert(`${t('errorSubmissionFailed')}: ${message}`);
   }
 }
 
-// 多言語対応: UI要素を更新する関数
 function updateUI(lang?: Language): void {
   const currentLang = lang || getLanguage();
   const translations = getTranslations(currentLang);
 
-  // data-i18n属性を持つ要素を更新
   document.querySelectorAll('[data-i18n]').forEach((element) => {
     const key = element.getAttribute('data-i18n');
     if (key && key in translations) {
-      // ラベル内の.label-text要素を更新（ツールチップ付きラベルの場合）
       const labelText = element.querySelector('.label-text');
       if (labelText) {
         labelText.textContent = translations[key as keyof typeof translations];
       } else if (!element.querySelector('.tooltip-icon')) {
-        // ツールチップアイコンがない場合は要素全体を更新
         element.textContent = translations[key as keyof typeof translations];
       }
     }
   });
 
-  // data-i18n-placeholder属性を持つ要素を更新
   document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
     const key = element.getAttribute('data-i18n-placeholder');
     if (key && key in translations && element instanceof HTMLInputElement) {
@@ -306,7 +603,6 @@ function updateUI(lang?: Language): void {
     }
   });
 
-  // data-i18n-tooltip属性を持つ要素を更新（カスタムツールチップ用）
   document.querySelectorAll('[data-i18n-tooltip]').forEach((element) => {
     const key = element.getAttribute('data-i18n-tooltip');
     if (key && key in translations) {
@@ -317,27 +613,24 @@ function updateUI(lang?: Language): void {
     }
   });
 
-  // HTMLのlang属性を更新
   document.documentElement.lang = currentLang;
   updateLanguageToggleUI(currentLang);
 }
 
-// 言語切り替え関数
 function switchLanguage(lang: Language): void {
   setLanguage(lang);
   updateUI(lang);
   updateLanguageToggleUI(lang);
 }
 
-// ページ読み込み時にUIを更新
 function initializeApp(): void {
   const currentLang = getLanguage();
   updateUI(currentLang);
   updateLanguageToggleUI(currentLang);
+  setChangeRequestLinkHref();
   renderRoute();
 }
 
-// DOMContentLoaded時に初期化
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
@@ -348,7 +641,6 @@ if (document.readyState === 'loading') {
   window.addEventListener('hashchange', handleHashChange);
 }
 
-// ダウンロード関数（グローバルスコープに公開）
 function downloadRegistrationApplicationFile(): void {
   if (generatedFilenames.registrationApplication) {
     downloadRegistrationApplication(generatedFilenames.registrationApplication);
@@ -367,9 +659,12 @@ function downloadSealRegistrationFile(): void {
   }
 }
 
-// グローバルスコープに公開（HTMLのonclickから呼び出すため）
-(window as any).showPage = showPage;
 (window as any).toggleLanguage = toggleLanguage;
+(window as any).loginSubmit = loginSubmit;
+(window as any).logout = logout;
+(window as any).navToHome = navToHome;
+(window as any).navToForm = navToForm;
+(window as any).navToApplications = navToApplications;
 (window as any).goToConfirm = goToConfirm;
 (window as any).confirmAndSubmit = confirmAndSubmit;
 (window as any).backToFormFromConfirm = backToFormFromConfirm;
@@ -378,4 +673,3 @@ function downloadSealRegistrationFile(): void {
 (window as any).downloadWordFile2 = downloadArticleOfIncorporationFile;
 (window as any).downloadExcelFile = downloadSealRegistrationFile;
 (window as any).switchLanguage = switchLanguage;
-
