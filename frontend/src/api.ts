@@ -181,7 +181,7 @@ export async function listApplications(): Promise<ApplicationListItem[]> {
 export async function submitApplication(data: FormData): Promise<{ message: string }> {
   const token = getAccessToken();
   if (!token) {
-    throw new Error('ログインが必要です');
+    throw new Error('You must login.');
   }
   const response = await fetch(`${API_BASE_URL}/submit-application`, {
     method: 'POST',
