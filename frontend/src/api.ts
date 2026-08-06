@@ -1,4 +1,13 @@
-import type { FormData, ApiResponse, ApiError, MeResponse, ApplicationListItem } from './types';
+import type {
+  FormData,
+  ApiResponse,
+  ApiError,
+  MeResponse,
+  ApplicationListItem,
+  PaymentFormData,
+  PaymentRequestItem,
+  PaymentListResponse,
+} from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:10000';
 
@@ -196,6 +205,109 @@ export async function submitApplication(data: FormData): Promise<{ message: stri
     throw new Error(parseErrorDetail(err));
   }
   return response.json();
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('You must login.');
+  }
+  const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(parseErrorDetail(err));
+  }
+  return response.json();
+}
+
+export async function listPaymentRequests(): Promise<PaymentListResponse> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  const response = await fetch(`${API_BASE_URL}/monthly-payment-requests`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(parseErrorDetail(err));
+  }
+  return response.json() as Promise<PaymentListResponse>;
+}
+
+export async function getPaymentRequest(id: number): Promise<PaymentRequestItem> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  const response = await fetch(`${API_BASE_URL}/monthly-payment-requests/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(parseErrorDetail(err));
+  }
+  return response.json() as Promise<PaymentRequestItem>;
+}
+
+function buildPaymentMultipart(data: PaymentFormData, attachment?: File | null): globalThis.FormData {
+  const body = new globalThis.FormData();
+  body.append('payeeName', data.payeeName);
+  body.append('bankName', data.bankName);
+  body.append('branchName', data.branchName);
+  body.append('accountType', data.accountType);
+  body.append('accountNumber', data.accountNumber);
+  body.append('accountHolderKana', data.accountHolderKana);
+  body.append('amountJpy', data.amountJpy);
+  body.append('invoiceNumber', data.invoiceNumber || '');
+  if (attachment) {
+    body.append('attachment', attachment);
+  }
+  return body;
+}
+
+async function submitPaymentMultipart(
+  url: string,
+  method: 'POST' | 'PUT',
+  data: PaymentFormData,
+  attachment?: File | null,
+): Promise<PaymentRequestItem> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('You must login.');
+  }
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    body: buildPaymentMultipart(data, attachment),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(parseErrorDetail(err));
+  }
+  return response.json() as Promise<PaymentRequestItem>;
+}
+
+export async function createPaymentRequest(
+  data: PaymentFormData,
+  attachment?: File | null,
+): Promise<PaymentRequestItem> {
+  return submitPaymentMultipart('/monthly-payment-requests', 'POST', data, attachment);
+}
+
+export async function updatePaymentRequest(
+  id: number,
+  data: PaymentFormData,
+  attachment?: File | null,
+): Promise<PaymentRequestItem> {
+  return submitPaymentMultipart(`/monthly-payment-requests/${id}`, 'PUT', data, attachment);
 }
 
 

@@ -41,3 +41,37 @@ export interface ApplicationListItem {
 }
 
 export type Language = 'ja' | 'en';
+
+export type PaymentAccountType = 'checking' | 'ordinary' | 'savings';
+
+export interface PaymentFormData {
+  payeeName: string;
+  bankName: string;
+  branchName: string;
+  accountType: PaymentAccountType | '';
+  accountNumber: string;
+  accountHolderKana: string;
+  amountJpy: string;
+  invoiceNumber: string;
+}
+
+export type PaymentRequestStatusCode = 'pending' | 'paid' | string;
+
+export interface PaymentRequestItem {
+  id: number;
+  status: PaymentRequestStatusCode;
+  payload: Record<string, unknown>;
+  attachment_url: string | null;
+  attachment_name: string | null;
+  created_at: string;
+  submitted_at: string | null;
+  updated_at: string | null;
+  editable: boolean;
+}
+
+export interface PaymentListResponse {
+  items: PaymentRequestItem[];
+  editable_window: boolean;
+  remaining_slots: number;
+  max_active: number;
+}

@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from auth_routes import router as auth_router
+from payment_routes import router as payment_router
 from database import get_db, init_db
 from deps import get_current_user
 from models import Application, ApplicationStatus, User
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(payment_router)
 
 # CORS 設定を追加
 app.add_middleware(

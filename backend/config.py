@@ -75,3 +75,12 @@ SEED_SAMPLE_DATA = os.getenv("SEED_SAMPLE_DATA", "false").strip().lower() in (
 )
 SAMPLE_APPLIED_EMAIL = os.getenv("SAMPLE_APPLIED_EMAIL", "applied@example.com")
 SAMPLE_APPLIED_PASSWORD = os.getenv("SAMPLE_APPLIED_PASSWORD", "testpassword123")
+
+# Monthly Payment Requests → Google Sheets tab name
+GOOGLE_SHEETS_PAYMENT_SHEET = os.getenv("GOOGLE_SHEETS_PAYMENT_SHEET", "PaymentRequests")
+
+# Admin API for marking payment requests paid (header X-Admin-Key)
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+
+# Max active (non-paid) payment requests per user
+PAYMENT_REQUEST_MAX_ACTIVE = int(os.getenv("PAYMENT_REQUEST_MAX_ACTIVE", "10"))

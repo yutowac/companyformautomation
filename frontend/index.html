@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Company Registration Form</title>
+    <title>One-stop Inc. Services</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
@@ -31,13 +31,94 @@
 
         <div id="app-shell" class="app-shell hidden">
             <div class="app-main">
-        <!-- Home -->
+        <!-- Services hub -->
+        <div id="page-hub" class="page">
+            <div class="page-inner home-page-inner">
+                <div class="home-topbar">
+                    <a href="#/profile" class="logout-link">→ Profile</a>
+                    <a href="#/login" class="logout-link" onclick="logout(); return false;">→ Logout</a>
+                </div>
+                <h1 class="home-title">One-stop Inc. Services</h1>
+                <p class="description">Choose a service to get started.</p>
+
+                <div class="hub-cards">
+                    <button type="button" class="hub-card" onclick="navToIncorporation()">
+                        <span class="hub-card-title">Incorporation</span>
+                        <span class="hub-card-desc">Start a new company incorporation application or check your application status.</span>
+                    </button>
+                    <button type="button" class="hub-card" onclick="navToBankAccount()">
+                        <span class="hub-card-title">Opening Bank Account</span>
+                        <span class="hub-card-desc">Get help opening a corporate bank account in Japan.</span>
+                    </button>
+                    <button type="button" class="hub-card" onclick="navToPaymentRequests()">
+                        <span class="hub-card-title">Monthly Payment Requests</span>
+                        <span class="hub-card-desc">Submit and track your monthly payment requests.</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile -->
+        <div id="page-profile" class="page">
+            <div class="page-inner login-page-inner">
+                <div class="home-topbar">
+                    <a href="#/services" class="logout-link">→ Back to Services</a>
+                </div>
+                <h1>Profile</h1>
+                <p class="description">View your account email and change your password.</p>
+                <div class="login-form">
+                    <label for="profileEmail">Email</label>
+                    <input type="email" id="profileEmail" disabled readonly>
+
+                    <label for="profileCurrentPassword">Current Password</label>
+                    <input type="password" id="profileCurrentPassword" autocomplete="current-password">
+
+                    <label for="profileNewPassword">New Password</label>
+                    <input type="password" id="profileNewPassword" autocomplete="new-password">
+
+                    <label for="profileConfirmPassword">Confirm New Password</label>
+                    <input type="password" id="profileConfirmPassword" autocomplete="new-password">
+
+                    <p id="profileMessage" class="form-message" style="display:none;"></p>
+                    <div class="button-row">
+                        <button type="button" class="btn-primary" onclick="changePasswordSubmit()">Update Password</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Opening Bank Account -->
+        <div id="page-bank" class="page">
+            <div class="page-inner home-page-inner">
+                <div class="home-topbar">
+                    <a href="#/services" class="logout-link">→ Back to Services</a>
+                    <a href="#/login" class="logout-link" onclick="logout(); return false;">→ Logout</a>
+                </div>
+                <h1 class="home-title">Opening Bank Account</h1>
+                <p class="description">Get help opening a corporate bank account in Japan.</p>
+
+                <div class="home-status-card">
+                    <p class="home-status-label">Service status</p>
+                    <p class="home-status-value">Coming Soon</p>
+                    <p class="home-status-meta">We are working on this service and will notify you once it is available.</p>
+                </div>
+
+                <div class="home-actions">
+                    <button type="button" class="btn-primary home-action-btn" onclick="navToServices()">
+                        Back to Services
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incorporation home -->
         <div id="page-home" class="page">
             <div class="page-inner home-page-inner">
                 <div class="home-topbar">
+                    <a href="#/services" class="logout-link">→ Back to Services</a>
                     <a href="#/login" class="logout-link" onclick="logout(); return false;">→ Logout</a>
                 </div>
-                <h1 class="home-title">Home</h1>
+                <h1 class="home-title">Incorporation</h1>
                 <p class="description">Create a new application or check your application status.</p>
 
                 <div class="home-status-card" id="homeStatusCard">
@@ -265,8 +346,8 @@
             </div>
         </div>
 
-        <!-- Thanks -->
-        <div id="page-thanks" class="page">
+        <!-- Complete (thanks) -->
+        <div id="page-complete" class="page">
             <div class="page-inner">
                 <h1 data-i18n="thanksTitle">Thank you for your application.</h1>
                 <p class="thanks-message" data-i18n="thanksMessage">We will contact you once everything is ready.</p>
@@ -335,6 +416,245 @@
                     Need to change your application?
                     <a id="changeRequestLink" class="change-request-link" href="#" target="_blank" rel="noopener noreferrer">Click here</a>
                 </p>
+            </div>
+        </div>
+
+        <!-- Monthly Payment Requests: list -->
+        <div id="page-payment-list" class="page">
+            <div class="page-inner home-page-inner">
+                <div class="home-topbar">
+                    <a href="#/services" class="logout-link">→ Back to Services</a>
+                    <a href="#/login" class="logout-link" onclick="logout(); return false;">→ Logout</a>
+                </div>
+                <h1 class="home-title">Monthly Payment Requests</h1>
+                <p class="description">Submit and track your monthly payment requests.</p>
+
+                <p id="paymentFreezeNotice" class="payment-freeze-notice" style="display:none;">
+                    Payment requests are frozen until the next editing window (1st–20th JST).
+                </p>
+
+                <div class="home-status-card" id="paymentStatusCard">
+                    <p class="home-status-label">Available slots</p>
+                    <p class="home-status-value" id="paymentSlotsInfo">Loading...</p>
+                    <p class="home-status-meta" id="paymentSlotsMeta"></p>
+                </div>
+
+                <div class="home-actions">
+                    <button type="button" class="btn-primary home-action-btn" id="btnNewPaymentRequest" onclick="navToPaymentForm()">
+                        New payment request
+                    </button>
+                </div>
+
+                <div id="paymentListContainer" class="payment-list"></div>
+            </div>
+        </div>
+
+        <!-- Monthly Payment Requests: form -->
+        <div id="page-payment-form" class="page">
+            <div class="page-inner">
+                <div class="form-header">
+                    <h1 id="paymentFormTitle">New Payment Request</h1>
+                    <p class="description">Please fill out the form below to submit your monthly payment request.</p>
+                </div>
+
+                <form id="paymentForm">
+                    <label for="paymentPayeeName">
+                        <span class="label-text">Payee Name</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <input type="text" id="paymentPayeeName" placeholder="e.g., Taro Yamada">
+
+                    <label for="paymentBankName">
+                        <span class="label-text">Bank Name</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <input type="text" id="paymentBankName" placeholder="e.g., Mitsubishi UFJ Bank">
+
+                    <label for="paymentBranchName">
+                        <span class="label-text">Branch Name</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <input type="text" id="paymentBranchName" placeholder="e.g., Shibuya Branch">
+
+                    <label for="paymentAccountType">
+                        <span class="label-text">Account Type</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <select id="paymentAccountType">
+                        <option value="">Select...</option>
+                        <option value="checking">Checking</option>
+                        <option value="ordinary">Ordinary</option>
+                        <option value="savings">Savings</option>
+                    </select>
+
+                    <label for="paymentAccountNumber">
+                        <span class="label-text">Account Number (7 digits)</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <input type="text" id="paymentAccountNumber" placeholder="1234567" maxlength="7" inputmode="numeric">
+
+                    <label for="paymentAccountHolderKana">
+                        <span class="label-text">Account Holder (Half-width Kana, max 30 characters)</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <input type="text" id="paymentAccountHolderKana" placeholder="ﾔﾏﾀﾞ ﾀﾛｳ" maxlength="30">
+
+                    <label for="paymentAmountJpy">
+                        <span class="label-text">Amount (JPY)</span>
+                        <span style="color:#e74c3c; font-weight:700;">*</span>
+                    </label>
+                    <input type="text" id="paymentAmountJpy" placeholder="100000" inputmode="numeric">
+
+                    <label for="paymentInvoiceNumber">
+                        <span class="label-text">Invoice Number</span>
+                        <span class="optional-note">(Optional)</span>
+                    </label>
+                    <input type="text" id="paymentInvoiceNumber" placeholder="e.g., INV-2026-001">
+
+                    <label for="paymentAttachment">
+                        <span class="label-text">Attachment (Image)</span>
+                        <span class="optional-note">(Optional)</span>
+                    </label>
+                    <input type="file" id="paymentAttachment" accept="image/*">
+                    <p id="paymentExistingAttachment" class="payment-existing-attachment" style="display:none;"></p>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="navToPaymentList()">Back to List</button>
+                        <button type="button" class="btn-primary" onclick="goToPaymentConfirm()">Done</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Monthly Payment Requests: confirm -->
+        <div id="page-payment-confirm" class="page">
+            <div class="page-inner">
+                <h1>Confirm your payment request</h1>
+                <div class="confirm-card">
+                    <div class="confirm-row">
+                        <p class="confirm-label">Payee Name</p>
+                        <p class="confirm-value" id="paymentConfirm_payeeName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Bank Name</p>
+                        <p class="confirm-value" id="paymentConfirm_bankName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Branch Name</p>
+                        <p class="confirm-value" id="paymentConfirm_branchName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Account Type</p>
+                        <p class="confirm-value" id="paymentConfirm_accountType"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Account Number</p>
+                        <p class="confirm-value" id="paymentConfirm_accountNumber"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Account Holder (Kana)</p>
+                        <p class="confirm-value" id="paymentConfirm_accountHolderKana"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Amount (JPY)</p>
+                        <p class="confirm-value" id="paymentConfirm_amountJpy"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Invoice Number</p>
+                        <p class="confirm-value" id="paymentConfirm_invoiceNumber"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Attachment</p>
+                        <p class="confirm-value" id="paymentConfirm_attachment"></p>
+                    </div>
+                </div>
+
+                <p class="confirm-question">
+                    Do you want to finalize?
+                </p>
+
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="btn-secondary"
+                        onclick="backToPaymentFormFromConfirm()"
+                    >
+                        Edit
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick="confirmAndSubmitPayment()"
+                    >
+                        Submit
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Payment Requests: complete -->
+        <div id="page-payment-complete" class="page">
+            <div class="page-inner">
+                <h1>Thank you for your payment request.</h1>
+                <p class="thanks-message">Your request has been submitted. We will review it and process the payment.</p>
+                <div class="button-row">
+                    <button type="button" class="btn-primary" onclick="navToPaymentList()">Back to List</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Payment Requests: status (detail) -->
+        <div id="page-payment-status" class="page">
+            <div class="page-inner applications-page-inner">
+                <div class="application-detail-header">
+                    <span class="status-badge" id="paymentStatusBadge">Pending</span>
+                    <h1>Payment request status</h1>
+                </div>
+                <p class="application-detail-meta" id="paymentStatusMeta"></p>
+
+                <div class="confirm-card" id="paymentDetailCard">
+                    <div class="confirm-row">
+                        <p class="confirm-label">Payee Name</p>
+                        <p class="confirm-value" id="paymentDetail_payeeName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Bank Name</p>
+                        <p class="confirm-value" id="paymentDetail_bankName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Branch Name</p>
+                        <p class="confirm-value" id="paymentDetail_branchName"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Account Type</p>
+                        <p class="confirm-value" id="paymentDetail_accountType"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Account Number</p>
+                        <p class="confirm-value" id="paymentDetail_accountNumber"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Account Holder (Kana)</p>
+                        <p class="confirm-value" id="paymentDetail_accountHolderKana"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Amount (JPY)</p>
+                        <p class="confirm-value" id="paymentDetail_amountJpy"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Invoice Number</p>
+                        <p class="confirm-value" id="paymentDetail_invoiceNumber"></p>
+                    </div>
+                    <div class="confirm-row">
+                        <p class="confirm-label">Attachment</p>
+                        <p class="confirm-value" id="paymentDetail_attachment"></p>
+                    </div>
+                </div>
+
+                <div class="application-detail-actions">
+                    <button type="button" class="btn-secondary" onclick="navToPaymentList()">Back to List</button>
+                    <button type="button" class="btn-primary" id="btnEditPaymentRequest" style="display:none;" onclick="navToEditCurrentPayment()">Edit</button>
+                </div>
             </div>
         </div>
 
