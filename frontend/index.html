@@ -515,7 +515,13 @@
                         <span class="label-text">Attachment (Image)</span>
                         <span class="optional-note">(Optional)</span>
                     </label>
-                    <input type="file" id="paymentAttachment" accept="image/*">
+                    <div class="file-upload">
+                        <input type="file" id="paymentAttachment" class="file-upload-input" accept="image/*" aria-label="Choose image attachment">
+                        <button type="button" class="file-upload-btn" id="paymentAttachmentBtn" onclick="triggerPaymentAttachmentPicker()">
+                            Choose file
+                        </button>
+                        <span class="file-upload-name" id="paymentAttachmentName">No file chosen</span>
+                    </div>
                     <p id="paymentExistingAttachment" class="payment-existing-attachment" style="display:none;"></p>
 
                     <div class="form-actions">

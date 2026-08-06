@@ -363,6 +363,7 @@ function populatePaymentForm(data: PaymentFormData): void {
   (document.getElementById('paymentInvoiceNumber') as HTMLInputElement).value = data.invoiceNumber;
   const fileInput = document.getElementById('paymentAttachment') as HTMLInputElement | null;
   if (fileInput) fileInput.value = '';
+  updatePaymentAttachmentLabel(null);
 }
 
 function resetPaymentFormFields(): void {
@@ -383,6 +384,29 @@ function resetPaymentFormFields(): void {
   if (select) select.value = '';
   const fileInput = document.getElementById('paymentAttachment') as HTMLInputElement | null;
   if (fileInput) fileInput.value = '';
+  updatePaymentAttachmentLabel(null);
+}
+
+function updatePaymentAttachmentLabel(file: File | null): void {
+  const nameEl = document.getElementById('paymentAttachmentName');
+  if (!nameEl) return;
+  if (file) {
+    nameEl.textContent = file.name;
+    nameEl.classList.add('has-file');
+  } else {
+    nameEl.textContent = 'No file chosen';
+    nameEl.classList.remove('has-file');
+  }
+}
+
+function triggerPaymentAttachmentPicker(): void {
+  const fileInput = document.getElementById('paymentAttachment') as HTMLInputElement | null;
+  fileInput?.click();
+}
+
+function onPaymentAttachmentChange(): void {
+  const fileInput = document.getElementById('paymentAttachment') as HTMLInputElement | null;
+  updatePaymentAttachmentLabel(fileInput?.files?.[0] ?? null);
 }
 
 function showExistingAttachment(name: string | null | undefined): void {
@@ -1253,6 +1277,8 @@ function initializeApp(): void {
   updateUI(currentLang);
   updateLanguageToggleUI(currentLang);
   setChangeRequestLinkHref();
+  const paymentAttachment = document.getElementById('paymentAttachment') as HTMLInputElement | null;
+  paymentAttachment?.addEventListener('change', onPaymentAttachmentChange);
   renderRoute();
 }
 
@@ -1305,6 +1331,7 @@ function downloadSealRegistrationFile(): void {
 (window as any).goToPaymentConfirm = goToPaymentConfirm;
 (window as any).backToPaymentFormFromConfirm = backToPaymentFormFromConfirm;
 (window as any).confirmAndSubmitPayment = confirmAndSubmitPayment;
+(window as any).triggerPaymentAttachmentPicker = triggerPaymentAttachmentPicker;
 (window as any).downloadWordFile = downloadRegistrationApplicationFile;
 (window as any).downloadWordFile2 = downloadArticleOfIncorporationFile;
 (window as any).downloadExcelFile = downloadSealRegistrationFile;
